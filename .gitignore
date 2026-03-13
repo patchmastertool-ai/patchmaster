@@ -38,3 +38,4 @@ vendor/certs/*.crt
 # Packaging temp
 packaging/debpkg/
 packaging/dist/
+.build-venv/bin/python
