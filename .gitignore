@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Build outputs
+frontend/build/
+dist/
+*.egg-info/
+
+# Docker
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+*.env.local
+
+# SSL certificates (never commit private keys!)
+certs/*.pem
+certs/*.key
+certs/*.crt
+!certs/README.md
+vendor/certs/*.pem
+vendor/certs/*.key
+vendor/certs/*.crt
+!vendor/certs/README.md
+
+# Packaging temp
+packaging/debpkg/
+packaging/dist/
