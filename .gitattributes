@@ -12,3 +12,6 @@ Makefile text eol=lf
 *.bat text eol=crlf
 *.cmd text eol=crlf
 .build-venv/bin/python filter=lfs diff=lfs merge=lfs -text
+build-venv.tar.gz filter=lfs diff=lfs merge=lfs -text
+release-bundle.zip filter=lfs diff=lfs merge=lfs -text
+release-bundle-protected.zip filter=lfs diff=lfs merge=lfs -text
