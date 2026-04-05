@@ -23,6 +23,7 @@ Thumbs.db
 
 # Env
 .env
+.license-authority.env
 *.env.local
 
 # SSL certificates (never commit private keys!)
@@ -38,4 +39,60 @@ vendor/certs/*.crt
 # Packaging temp
 packaging/debpkg/
 packaging/dist/
-.build-venv/bin/python
+.build-venv/
+.seed-venv/
+
+# Additional build scratch dirs
+.test-venv/
+agent/dist/
+agent/winbuild_venv/
+agent/pyi_build/
+agent/windows_stage/
+agent/iexpress_stage/
+
+# Vendor runtime data (never commit live DBs or pre-built venvs)
+vendor/data/*.db
+vendor/venv-linux.tar.gz
+vendor/dist/
+vendor/wheels/tmp/
+
+# Test/coverage artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+reports/
+output/
+tmp/
+.tmp_pytest_vendor/
+pytest-cache-files-*/
+vendor-db-check-*/
+frontend/test-results/
+
+# Local build and release scratch space
+.build-release-venv/
+.venv-vendor/
+.release-staging/
+vendor/python-testdeps/
+vendor/python-testdeps-flat/
+wsl_write_test.txt
+
+# Stray path-encoded artifact directories from WSL/Windows interop
+CUserstestDesktoppat-1/
+
+# Kiro AI assistant notes (optional - can be committed if useful)
+# docs/kiro-notes/
+
+# Large archive files (backups, packages, bundles)
+*.tar.gz
+*.zip
+*.7z
+*.exe
+*.deb
+*.rpm
+*.msi
+
+# Exception: Keep small static installer scripts
+!backend/static/install-agent.sh
+!backend/static/install-agent.ps1
+!backend/static/install-agent.cmd
+!backend/static/install.sh

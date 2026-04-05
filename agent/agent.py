@@ -10,34 +10,232 @@ import time
 import json
 import glob
 import re
-from datetime import datetime
+import stat
+import uuid
+from datetime import datetime, timezone
 import platform
 from flask import Flask, jsonify, request, send_file
-from prometheus_client import start_http_server, Gauge
+from prometheus_client import start_http_server, Gauge, CollectorRegistry
 from logging.handlers import RotatingFileHandler
 import yaml
+import urllib.request
+import urllib.error
+import tempfile
+from werkzeug.utils import secure_filename
 import threading
 import zipfile
+import tarfile
 import psutil
+import functools
+import hmac as _hmac
+from pathlib import Path
 
 __version__ = "2.0.0"
 
 # --- Config ---
 IS_WINDOWS = platform.system() == "Windows"
 
+# ── Agent API token auth ──────────────────────────────────────────────────────
+# The agent accepts two valid tokens (either is sufficient):
+#   1. AGENT_API_TOKEN env var — a shared/override token set by the operator.
+#   2. The per-host registration token written to STATE_DIR/token by main.py
+#      after the agent registers with the backend.  The backend stores the same
+#      value in hosts.agent_token, so it can look it up per-host and send it.
+#
+# If neither token is configured yet, privileged endpoints stay unavailable until
+# the heartbeat service registers and persists the per-host token.
+
+def _load_valid_tokens() -> set:
+    """Return the set of currently valid bearer tokens."""
+    tokens = set()
+    env_tok = os.environ.get("AGENT_API_TOKEN", "").strip()
+    if env_tok:
+        tokens.add(env_tok)
+    # Per-host registration token written by main.py
+    _state_dir = os.environ.get("PATCHMASTER_AGENT_STATE") or (
+        r"C:\ProgramData\PatchMaster-Agent" if IS_WINDOWS else "/var/lib/patch-agent"
+    )
+    _token_path = os.path.join(_state_dir, "token")
+    try:
+        if os.path.isfile(_token_path):
+            reg_tok = open(_token_path).read().strip()
+            if reg_tok:
+                tokens.add(reg_tok)
+    except OSError:
+        pass
+    return tokens
+
+
+def _require_auth(fn):
+    """Decorator: enforce bearer-token auth when any token is configured."""
+    @functools.wraps(fn)
+    def _wrapper(*args, **kwargs):
+        valid_tokens = _load_valid_tokens()
+        if not valid_tokens:
+            return jsonify({"error": "agent auth token not initialized"}), 503
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            provided = auth_header.split(" ", 1)[1].strip()
+        else:
+            provided = ""
+        # Constant-time comparison against each valid token
+        if not provided or not any(_hmac.compare_digest(provided, t) for t in valid_tokens):
+            return jsonify({"error": "unauthorized"}), 401
+        return fn(*args, **kwargs)
+    return _wrapper
+
+
+def _real_norm(path: str) -> str:
+    return os.path.normcase(os.path.realpath(path))
+
+
+def _is_within_dir(path: str, root: str) -> bool:
+    root_real = _real_norm(root)
+    path_real = _real_norm(path)
+    return path_real == root_real or path_real.startswith(root_real + os.sep)
+
+
+def _safe_extract_zip(zip_obj: zipfile.ZipFile, dest: str) -> None:
+    dest_real = _real_norm(dest)
+    for member in zip_obj.infolist():
+        member_name = member.filename
+        if os.path.isabs(member_name):
+            raise ValueError(f"Archive member uses absolute path: {member_name}")
+        mode = member.external_attr >> 16
+        if stat.S_ISLNK(mode):
+            raise ValueError(f"Archive member is a symlink: {member_name}")
+        out_path = _real_norm(os.path.join(dest, member_name))
+        if not (out_path == dest_real or out_path.startswith(dest_real + os.sep)):
+            raise ValueError(f"Archive member escapes target directory: {member_name}")
+    zip_obj.extractall(dest)
+
+
+def _safe_extract_tar(tar_obj: tarfile.TarFile, dest: str) -> None:
+    dest_real = _real_norm(dest)
+    for member in tar_obj.getmembers():
+        member_name = member.name
+        if os.path.isabs(member_name):
+            raise ValueError(f"Archive member uses absolute path: {member_name}")
+        if member.issym() or member.islnk():
+            raise ValueError(f"Archive member is a link: {member_name}")
+        out_path = _real_norm(os.path.join(dest, member_name))
+        if not (out_path == dest_real or out_path.startswith(dest_real + os.sep)):
+            raise ValueError(f"Archive member escapes target directory: {member_name}")
+    tar_obj.extractall(dest)
+
+
+def _agent_callback_token() -> str:
+    state_dir = os.environ.get("PATCHMASTER_AGENT_STATE") or (
+        r"C:\ProgramData\PatchMaster-Agent" if IS_WINDOWS else "/var/lib/patch-agent"
+    )
+    token_path = os.path.join(state_dir, "token")
+    try:
+        if os.path.isfile(token_path):
+            token = open(token_path).read().strip()
+            if token:
+                return token
+    except OSError:
+        pass
+    return os.environ.get("AGENT_API_TOKEN", "").strip()
+
+
+def _controller_url() -> str:
+    return str(os.environ.get("CONTROLLER_URL", "") or "").strip().rstrip("/")
+
+
+def _path_size_bytes(path: str) -> int:
+    if not path or not os.path.exists(path):
+        return 0
+    if os.path.isfile(path):
+        return int(os.path.getsize(path))
+    total = 0
+    for root, _, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                pass
+    return int(total)
+
+
+def _report_backup_result(log_id, status, output_file="", duration_seconds=0.0, file_size_bytes=0, message=""):
+    controller_url = _controller_url()
+    token = _agent_callback_token()
+    if not controller_url or not token or not log_id:
+        return
+    body = json.dumps({
+        "log_id": int(log_id),
+        "status": str(status or ""),
+        "output_file": str(output_file or ""),
+        "file_size_bytes": int(file_size_bytes or 0),
+        "duration_seconds": float(duration_seconds or 0.0),
+        "message": str(message or ""),
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{controller_url}/api/backups/agent-callback",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            resp.read()
+    except Exception as exc:
+        logger.error(f"Backup callback failed for log {log_id}: {exc}")
+
 # --- Metrics ---
-cpu_usage = Gauge('system_cpu_usage_percent', 'System CPU usage percent')
-memory_usage = Gauge('system_memory_usage_percent', 'System memory usage percent')
-disk_usage = Gauge('system_disk_usage_percent', 'System disk usage percent', ['mountpoint'])
-uptime_seconds = Gauge('system_uptime_seconds', 'System uptime in seconds')
-patch_gauge = Gauge('patch_job_status', 'Current patch job status (0=idle, 1=running, 2=success, 3=failed)')
-last_patch_ts = Gauge('patch_last_success_timestamp', 'Timestamp of last successful patch')
+# Use a dedicated registry to avoid duplicate timeseries errors when the module is
+# imported multiple times (e.g., by Windows services restarting quickly).
+REGISTRY = CollectorRegistry()
+cpu_usage = Gauge('system_cpu_usage_percent', 'System CPU usage percent', registry=REGISTRY)
+memory_usage = Gauge('system_memory_usage_percent', 'System memory usage percent', registry=REGISTRY)
+disk_usage = Gauge('system_disk_usage_percent', 'System disk usage percent', ['mountpoint'], registry=REGISTRY)
+disk_read_bps = Gauge('system_disk_read_bytes_per_sec', 'System disk read throughput bytes/sec', registry=REGISTRY)
+disk_write_bps = Gauge('system_disk_write_bytes_per_sec', 'System disk write throughput bytes/sec', registry=REGISTRY)
+uptime_seconds = Gauge('system_uptime_seconds', 'System uptime in seconds', registry=REGISTRY)
+host_info = Gauge('patchmaster_host_info', 'Static host metadata (1=present)', ['host_os'], registry=REGISTRY)
+patch_gauge = Gauge('patch_job_status', 'Current patch job status (0=idle, 1=running, 2=success, 3=failed)', registry=REGISTRY)
+last_patch_ts = Gauge('patch_last_success_timestamp', 'Timestamp of last successful patch', registry=REGISTRY)
+
+# Cache for WSUS operations (Windows only). Helps report scan/install progress to the backend/UI.
+WSUS_CACHE = {
+    "status": "idle",          # idle | scanning | installing | error
+    "pending": [],
+    "last_scan": None,
+    "last_error": None,
+}
+
+
+def _host_os_label() -> str:
+    system = (platform.system() or "").strip().lower()
+    if "win" in system:
+        return "windows"
+    if system == "linux":
+        return "linux"
+    return system or "unknown"
 
 def update_metrics_loop():
+    prev_read = None
+    prev_write = None
+    prev_ts = None
     while True:
         try:
             cpu_usage.set(psutil.cpu_percent(interval=None))
             memory_usage.set(psutil.virtual_memory().percent)
+            host_info.labels(host_os=_host_os_label()).set(1)
+            io_now = psutil.disk_io_counters()
+            now_ts = time.time()
+            if io_now and prev_read is not None and prev_write is not None and prev_ts is not None:
+                dt = max(now_ts - prev_ts, 0.001)
+                disk_read_bps.set(max((io_now.read_bytes - prev_read) / dt, 0.0))
+                disk_write_bps.set(max((io_now.write_bytes - prev_write) / dt, 0.0))
+            if io_now:
+                prev_read = io_now.read_bytes
+                prev_write = io_now.write_bytes
+                prev_ts = now_ts
             for part in psutil.disk_partitions(all=False):
                 if IS_WINDOWS or part.mountpoint == '/':
                     try:
@@ -51,9 +249,10 @@ def update_metrics_loop():
 
 threading.Thread(target=update_metrics_loop, daemon=True).start()
 
-LOG_DIR = r'C:\ProgramData\patch-agent\logs' if IS_WINDOWS else '/var/log/patch-agent'
-SNAPSHOT_DIR = r'C:\ProgramData\patch-agent\snapshots' if IS_WINDOWS else '/var/lib/patch-agent/snapshots'
-OFFLINE_DIR = r'C:\ProgramData\patch-agent\offline-pkgs' if IS_WINDOWS else '/var/lib/patch-agent/offline-pkgs'
+# Prefer ProgramData\PatchMaster-Agent for Windows to align with service logs.
+LOG_DIR = r'C:\ProgramData\PatchMaster-Agent\logs' if IS_WINDOWS else '/var/log/patch-agent'
+SNAPSHOT_DIR = r'C:\ProgramData\PatchMaster-Agent\snapshots' if IS_WINDOWS else '/var/lib/patch-agent/snapshots'
+OFFLINE_DIR = r'C:\ProgramData\PatchMaster-Agent\offline-pkgs' if IS_WINDOWS else '/var/lib/patch-agent/offline-pkgs'
 
 for d in [LOG_DIR, SNAPSHOT_DIR, OFFLINE_DIR]:
     try:
@@ -72,18 +271,32 @@ for d in [LOG_DIR, SNAPSHOT_DIR, OFFLINE_DIR]:
         os.makedirs(SNAPSHOT_DIR, exist_ok=True)
         os.makedirs(OFFLINE_DIR, exist_ok=True)
 
+STATE_DIR = os.path.dirname(SNAPSHOT_DIR) or "."
+SHUTDOWN_QUEUE_FILE = os.path.join(STATE_DIR, "software-shutdown-queue.json")
+QUEUE_LOCK = threading.Lock()
+
 logger = logging.getLogger("patch-agent")
 logger.setLevel(logging.INFO)
-log_file = os.path.join(LOG_DIR, 'agent.log')
-fh = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=5)
+
+# Set up formatter
 fmt = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-fh.setFormatter(fmt)
-logger.addHandler(fh)
+
+# Try to set up file logging, fall back to console-only if permission denied (e.g., during tests)
+log_file = os.path.join(LOG_DIR, 'agent.log')
+try:
+    fh = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=5)
+    fh.setFormatter(fmt)
+    logger.addHandler(fh)
+except (PermissionError, OSError) as e:
+    # Running without admin privileges (e.g., in tests) - use console logging only
+    pass
+
 console = logging.StreamHandler()
 console.setFormatter(fmt)
 logger.addHandler(console)
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = None  # No limit - handle uploads of any size
 
 # --- Package Manager Abstraction ---
 
@@ -91,7 +304,7 @@ class BasePackageManager:
     def list_installed(self): raise NotImplementedError()
     def list_upgradable(self): raise NotImplementedError()
     def refresh(self): raise NotImplementedError()
-    def install(self, packages, local=False): raise NotImplementedError()
+    def install(self, packages, local=False, security_only=False, exclude_kernel=False, extra_flags=None): raise NotImplementedError()
     def remove(self, packages): raise NotImplementedError()
 
 class AptManager(BasePackageManager):
@@ -126,11 +339,24 @@ class AptManager(BasePackageManager):
     def refresh(self):
         return run_cmd(["apt-get", "update", "-qq"], timeout=120)
 
-    def install(self, packages, local=False):
+    def install(self, packages, local=False, security_only=False, exclude_kernel=False, extra_flags=None):
         if local:
-            # Local .deb installation
-            return run_cmd(["dpkg", "-i"] + packages, timeout=600)
-        return run_cmd(["apt-get", "install", "-y", "-qq"] + packages, timeout=600)
+            # Use apt-get instead of dpkg for better dependency handling
+            # apt-get can install local .deb files and resolve dependencies
+            return run_cmd(["apt-get", "install", "-y", "-qq", "--allow-downgrades"] + packages, timeout=600)
+        if security_only and not packages:
+            cmd = ["apt-get", "upgrade", "-y", "-qq",
+                   "-o", "Dir::Etc::SourceList=/etc/apt/sources.list.d/security.list",
+                   "-o", "Dir::Etc::SourceParts=/dev/null"]
+        elif not packages:
+            cmd = ["apt-get", "upgrade", "-y", "-qq"]
+        else:
+            cmd = ["apt-get", "install", "-y", "-qq"]
+        if exclude_kernel:
+            cmd += ["--exclude=linux-image*", "--exclude=linux-headers*", "--exclude=linux-modules*"]
+        if extra_flags:
+            cmd += [f for f in extra_flags if isinstance(f, str)]
+        return run_cmd(cmd + packages, timeout=600)
 
     def remove(self, packages):
         return run_cmd(["apt-get", "remove", "-y", "-qq"] + packages, timeout=600)
@@ -139,6 +365,10 @@ class AptManager(BasePackageManager):
         return os.path.exists("/var/run/reboot-required")
 
 class DnfManager(BasePackageManager):
+    def __init__(self):
+        # Detect whether to use dnf or yum (Amazon Linux 2 uses yum, AL2023+ uses dnf)
+        self.cmd = "dnf" if os.path.exists("/usr/bin/dnf") else "yum"
+    
     def list_installed(self):
         rc, out = run_cmd(["rpm", "-qa", "--queryformat", "%{NAME}\t%{VERSION}-%{RELEASE}\tinstalled\n"], timeout=30)
         if rc != 0: return []
@@ -150,8 +380,8 @@ class DnfManager(BasePackageManager):
         return packages
 
     def list_upgradable(self):
-        rc, out = run_cmd(["dnf", "check-update", "--quiet"], timeout=60)
-        # dnf check-update returns 100 if updates are available
+        rc, out = run_cmd([self.cmd, "check-update", "--quiet"], timeout=60)
+        # dnf/yum check-update returns 100 if updates are available
         if rc not in [0, 100]: return []
         packages = []
         for line in out.strip().splitlines():
@@ -162,20 +392,43 @@ class DnfManager(BasePackageManager):
         return packages
 
     def refresh(self):
-        return run_cmd(["dnf", "makecache"], timeout=120)
+        return run_cmd([self.cmd, "makecache"], timeout=120)
 
-    def install(self, packages, local=False):
+    def install(self, packages, local=False, security_only=False, exclude_kernel=False, extra_flags=None):
         if local:
-            return run_cmd(["dnf", "localinstall", "-y"] + packages, timeout=600)
-        return run_cmd(["dnf", "install", "-y"] + packages, timeout=600)
+            # Use localinstall for both yum and dnf
+            return run_cmd([self.cmd, "localinstall", "-y"] + packages, timeout=600)
+        if security_only and not packages:
+            cmd = [self.cmd, "upgrade", "-y", "--security"]
+        elif not packages:
+            cmd = [self.cmd, "upgrade", "-y"]
+        else:
+            cmd = [self.cmd, "install", "-y"]
+        if exclude_kernel:
+            cmd += ["--exclude=kernel*"]
+        if extra_flags:
+            cmd += [f for f in extra_flags if isinstance(f, str)]
+        return run_cmd(cmd + packages, timeout=600)
 
     def remove(self, packages):
-        return run_cmd(["dnf", "remove", "-y"] + packages, timeout=600)
+        return run_cmd([self.cmd, "remove", "-y"] + packages, timeout=600)
 
     def check_reboot(self):
-        # dnf needs-restarting -r returns 1 if reboot needed
-        rc, _ = run_cmd(["dnf", "needs-restarting", "-r"], timeout=30)
-        return rc == 1
+        # Check if reboot is required (works for both yum and dnf)
+        if self.cmd == "dnf":
+            # dnf needs-restarting -r returns 1 if reboot needed
+            rc, _ = run_cmd(["dnf", "needs-restarting", "-r"], timeout=30)
+            return rc == 1
+        else:
+            # For yum (Amazon Linux 2), check if kernel was updated
+            rc, out = run_cmd(["rpm", "-q", "--last", "kernel"], timeout=30)
+            if rc == 0:
+                lines = out.strip().splitlines()
+                if len(lines) > 1:
+                    # Multiple kernels installed, likely needs reboot
+                    return True
+            # Also check for /var/run/reboot-required (some systems create this)
+            return os.path.exists("/var/run/reboot-required")
 
 class WinManager(BasePackageManager):
     def list_installed(self):
@@ -190,41 +443,59 @@ class WinManager(BasePackageManager):
         except: return []
 
     def list_upgradable(self):
-        # winget is the modern way, but might not be on all servers
         rc, out = run_cmd(["winget", "upgrade"], timeout=60)
         if rc != 0: return []
-        # Parse winget output (simplified)
         packages = []
         lines = out.strip().splitlines()
-        for line in lines[2:]: # Skip headers
+        # Find the header line to determine column positions
+        header_idx = next((i for i, l in enumerate(lines) if "Id" in l and "Version" in l), -1)
+        if header_idx < 0:
+            return packages
+        for line in lines[header_idx + 2:]:  # skip header + separator
+            line = line.rstrip()
+            if not line or line.startswith("-"):
+                continue
             parts = re.split(r'\s{2,}', line.strip())
             if len(parts) >= 4:
-                packages.append({"name": parts[0], "current_version": parts[2], "available_version": parts[3]})
+                packages.append({
+                    "name": parts[0],
+                    "id": parts[1] if len(parts) > 1 else "",
+                    "current_version": parts[2] if len(parts) > 2 else "",
+                    "available_version": parts[3] if len(parts) > 3 else "",
+                })
         return packages
 
     def refresh(self):
         return run_cmd(["winget", "source", "update"], timeout=60)
 
-    def install(self, packages, local=False):
-        # For Windows, local install usually means .msi or .exe
+    def install(self, packages, local=False, security_only=False, exclude_kernel=False, extra_flags=None):
         results = []
+        last_rc, last_out = 0, ""
         for pkg in packages:
             if pkg.endswith(".msi"):
                 rc, out = run_cmd(["msiexec", "/i", pkg, "/quiet", "/norestart"], timeout=600)
             elif pkg.endswith(".exe"):
-                # Silent install flags vary, assuming /S for now
                 rc, out = run_cmd([pkg, "/S"], timeout=600)
             else:
-                rc, out = run_cmd(["winget", "install", "--id", pkg, "--silent"], timeout=600)
+                rc, out = run_cmd(["winget", "install", "--id", pkg, "--silent", "--accept-package-agreements", "--accept-source-agreements"], timeout=600)
             results.append((rc, out))
-        return results[0] # Return first result for compatibility
+            if rc != 0:
+                last_rc, last_out = rc, out
+        # Return first failure if any, otherwise last success
+        failed = [(rc, out) for rc, out in results if rc != 0]
+        if failed:
+            return failed[0]
+        return results[-1] if results else (0, "")
 
     def remove(self, packages):
         results = []
         for pkg in packages:
             rc, out = run_cmd(["winget", "uninstall", "--id", pkg, "--silent"], timeout=600)
             results.append((rc, out))
-        return results[0]
+        failed = [(rc, out) for rc, out in results if rc != 0]
+        if failed:
+            return failed[0]
+        return results[-1] if results else (0, "")
 
     def check_reboot(self):
         # Check registry for pending reboot
@@ -238,9 +509,26 @@ class WinManager(BasePackageManager):
 
 def get_pkg_manager():
     if IS_WINDOWS: return WinManager()
+    
+    # Check for Amazon Linux (uses yum/dnf)
+    if os.path.exists("/etc/system-release"):
+        try:
+            with open("/etc/system-release") as f:
+                content = f.read().lower()
+                if "amazon linux" in content:
+                    # Amazon Linux 2023+ uses dnf, AL2 uses yum
+                    if os.path.exists("/usr/bin/dnf"):
+                        return DnfManager()
+                    elif os.path.exists("/usr/bin/yum"):
+                        return DnfManager()  # DnfManager handles both yum and dnf
+        except:
+            pass
+    
+    # Standard detection
     if os.path.exists("/usr/bin/apt-get"): return AptManager()
     if os.path.exists("/usr/bin/dnf"): return DnfManager()
-    if os.path.exists("/usr/bin/yum"): return DnfManager() # Fallback
+    if os.path.exists("/usr/bin/yum"): return DnfManager()  # Fallback for RHEL/CentOS
+    
     return BasePackageManager()
 
 pkg_mgr = get_pkg_manager()
@@ -257,18 +545,110 @@ JOB_STATUS = {
     "started_at": None
 }
 
-patch_gauge = Gauge("patch_job_status", "0=idle,1=running,2=success,3=failure")
-last_patch_ts = Gauge("last_patch_timestamp", "Last patch epoch")
-
-def run_cmd(cmd, timeout=3600):
-    logger.info("CMD: %s", " ".join(cmd) if isinstance(cmd, list) else cmd)
+def run_cmd(cmd, timeout=3600, cwd=None):
+    logger.info("CMD: %s", " ".join(str(c) for c in cmd) if isinstance(cmd, list) else cmd)
     try:
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout)
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout, cwd=cwd)
         return proc.returncode, proc.stdout
     except subprocess.TimeoutExpired:
         return -1, "Command timed out"
     except Exception as e:
         return -1, str(e)
+
+
+def _normalize_job_result(result):
+    if isinstance(result, dict):
+        if "success" in result:
+            return result
+        return {"success": True, "result": result}
+    if isinstance(result, tuple) and len(result) >= 2:
+        rc = int(result[0])
+        out = result[1]
+        return {
+            "success": rc == 0,
+            "rc": rc,
+            "output": out,
+            "message": str(out or ""),
+        }
+    if isinstance(result, bool):
+        return {"success": result}
+    if result is None:
+        return {"success": True}
+    return {"success": bool(result), "result": result}
+
+
+def _load_shutdown_queue():
+    with QUEUE_LOCK:
+        try:
+            if not os.path.isfile(SHUTDOWN_QUEUE_FILE):
+                return []
+            with open(SHUTDOWN_QUEUE_FILE, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            return data if isinstance(data, list) else []
+        except Exception as exc:
+            logger.error(f"Failed to load shutdown software queue: {exc}")
+            return []
+
+
+def _save_shutdown_queue(items):
+    os.makedirs(os.path.dirname(SHUTDOWN_QUEUE_FILE) or ".", exist_ok=True)
+    with QUEUE_LOCK:
+        with open(SHUTDOWN_QUEUE_FILE, "w", encoding="utf-8") as fh:
+            json.dump(items, fh, indent=2)
+
+
+def _enqueue_shutdown_packages(action, packages, requested_by="", reason=""):
+    item = {
+        "id": str(uuid.uuid4()),
+        "action": str(action or "install"),
+        "packages": [str(pkg).strip() for pkg in (packages or []) if str(pkg).strip()],
+        "requested_by": str(requested_by or "").strip(),
+        "reason": str(reason or "").strip(),
+        "queued_at": datetime.now(timezone.utc).isoformat(),
+    }
+    items = _load_shutdown_queue()
+    items.append(item)
+    _save_shutdown_queue(items)
+    return item
+
+
+def _execute_shutdown_queue():
+    queued = _load_shutdown_queue()
+    if not queued:
+        return {"success": True, "executed": [], "failed": [], "message": "No queued shutdown installs"}
+
+    executed = []
+    failed_items = []
+    for item in queued:
+        action = str(item.get("action") or "install").strip().lower()
+        packages = [str(pkg).strip() for pkg in (item.get("packages") or []) if str(pkg).strip()]
+        if not packages:
+            continue
+        if action == "remove":
+            rc, out = pkg_mgr.remove(packages)
+        else:
+            rc, out = pkg_mgr.install(packages)
+        result = {
+            "id": item.get("id"),
+            "action": action,
+            "packages": packages,
+            "rc": rc,
+            "output": out,
+            "success": rc == 0,
+        }
+        executed.append(result)
+        if rc != 0:
+            failed_copy = dict(item)
+            failed_copy["last_error"] = str(out or "")
+            failed_items.append(failed_copy)
+
+    _save_shutdown_queue(failed_items)
+    return {
+        "success": len(failed_items) == 0,
+        "executed": executed,
+        "failed": failed_items,
+        "message": "Shutdown install queue executed" if not failed_items else "One or more queued shutdown installs failed",
+    }
 
 def record_job(job_data):
     """Log job history to disk (simple JSON lines)."""
@@ -287,7 +667,7 @@ def run_async_job(job_type, target_func, *args, **kwargs):
         JOB_STATUS["progress"] = 0
         JOB_STATUS["log"] = []
         try:
-            result = target_func(*args, **kwargs)
+            result = _normalize_job_result(target_func(*args, **kwargs))
             JOB_STATUS["state"] = "success" if result.get("success") else "failed"
             JOB_STATUS["last_result"] = result
         except Exception as e:
@@ -313,6 +693,7 @@ def job_status():
     return jsonify(JOB_STATUS)
 
 @app.route("/job/reset", methods=["POST"])
+@_require_auth
 def job_reset():
     if JOB_STATUS["state"] == "running":
         return jsonify({"error": "Cannot reset running job"}), 400
@@ -324,24 +705,89 @@ def job_reset():
 
 @app.route("/health")
 def health():
-    return jsonify({
-        "status": "ok",
-        "hostname": platform.node(),
-        "os": platform.system(),
-        "reboot_required": pkg_mgr.check_reboot(),
-        "state": JOB_STATUS["state"]
-    })
+    try:
+        reboot_required = False
+        checker = getattr(pkg_mgr, "check_reboot", None)
+        if callable(checker):
+            reboot_required = bool(checker())
+        state = JOB_STATUS.get("state", "unknown")
+        if not isinstance(state, str):
+            state = str(state)
+        return jsonify({
+            "status": "ok",
+            "hostname": str(platform.node() or ""),
+            "os": str(platform.system() or ""),
+            "agent_version": str(__version__),
+            "reboot_required": reboot_required,
+            "state": state
+        })
+    except Exception as e:
+        logger.error(f"Health endpoint failure: {e}")
+        return jsonify({"status": "ok", "reboot_required": False, "state": "unknown"})
 
 @app.route("/system/reboot", methods=["POST"])
+@_require_auth
 def system_reboot():
-    """Trigger a reboot."""
-    if IS_WINDOWS:
-        run_async_job("reboot", run_cmd, ["shutdown", "/r", "/t", "5"])
-    else:
-        run_async_job("reboot", run_cmd, ["shutdown", "-r", "+1"])
+    """Trigger a reboot and process queued shutdown installs first."""
+    data = request.get_json(silent=True) or {}
+    run_shutdown_queue = bool(data.get("run_shutdown_queue", True))
+
+    def _task():
+        queue_result = {"success": True, "executed": [], "failed": [], "message": "Skipped shutdown queue"}
+        if run_shutdown_queue:
+            queue_result = _execute_shutdown_queue()
+            if not queue_result.get("success"):
+                return {"success": False, "message": "Queued shutdown installs failed", "queue": queue_result}
+        if IS_WINDOWS:
+            rc, out = run_cmd(["shutdown", "/r", "/t", "5"])
+        else:
+            rc, out = run_cmd(["shutdown", "-r", "+1"])
+        return {
+            "success": rc == 0,
+            "status": "reboot_scheduled" if rc == 0 else "reboot_failed",
+            "rc": rc,
+            "output": out,
+            "queue": queue_result,
+        }
+
+    ok, msg = run_async_job("reboot", _task)
+    if not ok:
+        return jsonify({"error": msg}), 409
     return jsonify({"status": "reboot_scheduled"})
 
+
+@app.route("/system/shutdown", methods=["POST"])
+@_require_auth
+def system_shutdown():
+    """Trigger a shutdown and process queued shutdown installs first."""
+    data = request.get_json(silent=True) or {}
+    run_shutdown_queue = bool(data.get("run_shutdown_queue", True))
+
+    def _task():
+        queue_result = {"success": True, "executed": [], "failed": [], "message": "Skipped shutdown queue"}
+        if run_shutdown_queue:
+            queue_result = _execute_shutdown_queue()
+            if not queue_result.get("success"):
+                return {"success": False, "message": "Queued shutdown installs failed", "queue": queue_result}
+        if IS_WINDOWS:
+            rc, out = run_cmd(["shutdown", "/s", "/t", "5"])
+        else:
+            rc, out = run_cmd(["shutdown", "-h", "+1"])
+        return {
+            "success": rc == 0,
+            "status": "shutdown_scheduled" if rc == 0 else "shutdown_failed",
+            "rc": rc,
+            "output": out,
+            "queue": queue_result,
+        }
+
+    ok, msg = run_async_job("shutdown", _task)
+    if not ok:
+        return jsonify({"error": msg}), 409
+    return jsonify({"status": "shutdown_scheduled"})
+
 @app.route("/software/manage", methods=["POST"])
+@_require_auth
 def software_manage():
     """Install or remove generic software."""
     data = request.get_json(silent=True) or {}
@@ -357,6 +803,39 @@ def software_manage():
     ok, msg = run_async_job(f"software_{action}", _task)
     if not ok: return jsonify({"error": msg}), 409
     return jsonify({"status": "started", "job": f"software_{action}"})
+
+
+@app.route("/software/queue", methods=["GET"])
+@_require_auth
+def software_queue_list():
+    items = _load_shutdown_queue()
+    return jsonify({"count": len(items), "items": items})
+
+
+@app.route("/software/queue", methods=["POST"])
+@_require_auth
+def software_queue_add():
+    data = request.get_json(silent=True) or {}
+    action = str(data.get("action") or "install").strip().lower()
+    packages = [str(pkg).strip() for pkg in (data.get("packages") or []) if str(pkg).strip()]
+    if action not in {"install", "remove"}:
+        return jsonify({"error": "Unsupported action"}), 400
+    if not packages:
+        return jsonify({"error": "No packages specified"}), 400
+    item = _enqueue_shutdown_packages(
+        action=action,
+        packages=packages,
+        requested_by=data.get("requested_by", ""),
+        reason=data.get("reason", ""),
+    )
+    return jsonify({"status": "queued", "item": item, "count": len(_load_shutdown_queue())})
+
+
+@app.route("/software/queue", methods=["DELETE"])
+@_require_auth
+def software_queue_clear():
+    _save_shutdown_queue([])
+    return jsonify({"status": "cleared"})
 
 
 def _run_powershell(script, timeout=600):
@@ -378,14 +857,17 @@ def _powershell_json(script, timeout=600):
 
 
 @app.route("/wsus/updates")
+@_require_auth
 def wsus_updates():
     if not IS_WINDOWS:
         return jsonify({"error": "WSUS is only available on Windows agents"}), 400
+    WSUS_CACHE["status"] = "scanning"
+    WSUS_CACHE["last_error"] = None
     script = (
         "$s=New-Object -ComObject Microsoft.Update.Session;"
         "$searcher=$s.CreateUpdateSearcher();"
         "$r=$searcher.Search(\"IsInstalled=0 and Type='Software'\");"
-        "$r.Updates | Select-Object Title,KBArticleIDs,MsrcSeverity,RebootRequired | ConvertTo-Json -Depth 6"
+        "$r.Updates | Select-Object Title,KBArticleIDs,MsrcSeverity,RebootRequired,IsInstalled,IsDownloaded,LastDeploymentChangeTime,@{Name='MaxDownloadSize';Expression={$_.MaxDownloadSize}},@{Name='UpdateID';Expression={$_.Identity.UpdateID}},@{Name='RevisionNumber';Expression={$_.Identity.RevisionNumber}},@{Name='Categories';Expression={$_.Categories | Select-Object -ExpandProperty Name}},@{Name='CVEIDs';Expression={$_.CveIDs}} | ConvertTo-Json -Depth 6"
     )
     try:
         data = _powershell_json(script, timeout=240)
@@ -393,31 +875,100 @@ def wsus_updates():
             data = []
         if isinstance(data, dict):
             data = [data]
+        WSUS_CACHE["pending"] = data
+        WSUS_CACHE["last_scan"] = datetime.now(timezone.utc).isoformat()
+        WSUS_CACHE["status"] = "idle"
         return jsonify({"count": len(data), "updates": data})
     except Exception as e:
+        WSUS_CACHE["status"] = "error"
+        WSUS_CACHE["last_error"] = str(e)
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/wsus/install", methods=["POST"])
+@_require_auth
 def wsus_install():
     if not IS_WINDOWS:
         return jsonify({"error": "WSUS is only available on Windows agents"}), 400
 
-    def _task():
+    WSUS_CACHE["status"] = "installing"
+    WSUS_CACHE["last_error"] = None
+
+    payload = request.get_json(silent=True) or {}
+    update_ids = payload.get("update_ids") if isinstance(payload, dict) else None
+    if not isinstance(update_ids, list):
+        update_ids = []
+    update_ids = [str(x).strip() for x in update_ids if str(x).strip()]
+
+    def _task(selected_update_ids=None):
+        filter_clause = ""
+        if selected_update_ids:
+            # build a PowerShell array of IDs and filter
+            filter_clause = ";$ids=@(" + ";".join([f"'{uid}'" for uid in selected_update_ids]) + ");$sel=@();foreach($u in $r.Updates){if($ids -contains $u.Identity.UpdateID){$sel+=$u}};$updates=$sel"
+        else:
+            filter_clause = ";$updates=New-Object -ComObject Microsoft.Update.UpdateColl;foreach($u in $r.Updates){[void]$updates.Add($u)}"
         script = (
             "$s=New-Object -ComObject Microsoft.Update.Session;"
             "$searcher=$s.CreateUpdateSearcher();"
             "$r=$searcher.Search(\"IsInstalled=0 and Type='Software'\");"
-            "$updates=New-Object -ComObject Microsoft.Update.UpdateColl;"
-            "foreach($u in $r.Updates){[void]$updates.Add($u)};"
+            f"{filter_clause};"
             "$down=$s.CreateUpdateDownloader();$down.Updates=$updates;[void]$down.Download();"
             "$inst=$s.CreateUpdateInstaller();$inst.Updates=$updates;$res=$inst.Install();"
             "$res | ConvertTo-Json -Depth 6"
         )
         rc, out = _run_powershell(script, timeout=3600)
-        return {"success": rc == 0, "output": out}
+        success = rc == 0
+        if success:
+            WSUS_CACHE["pending"] = []
+            WSUS_CACHE["status"] = "idle"
+        else:
+            WSUS_CACHE["status"] = "error"
+            WSUS_CACHE["last_error"] = out
+        return {"success": success, "output": out}
 
-    ok, msg = run_async_job("wsus_install", _task)
+    ok, msg = run_async_job("wsus_install", _task, update_ids)
+    if not ok:
+        return jsonify({"error": msg}), 409
+    return jsonify({"status": "started"})
+
+
+@app.route("/wsus/download", methods=["POST"])
+@_require_auth
+def wsus_download():
+    if not IS_WINDOWS:
+        return jsonify({"error": "WSUS is only available on Windows agents"}), 400
+    WSUS_CACHE["status"] = "downloading"
+    WSUS_CACHE["last_error"] = None
+    payload = request.get_json(silent=True) or {}
+    update_ids = payload.get("update_ids") if isinstance(payload, dict) else None
+    if not isinstance(update_ids, list):
+        update_ids = []
+    update_ids = [str(x).strip() for x in update_ids if str(x).strip()]
+
+    def _task(selected_update_ids=None):
+        filter_clause = ""
+        if selected_update_ids:
+            filter_clause = ";$ids=@(" + ";".join([f"'{uid}'" for uid in selected_update_ids]) + ");$sel=@();foreach($u in $r.Updates){if($ids -contains $u.Identity.UpdateID){$sel+=$u}};$updates=$sel"
+        else:
+            filter_clause = ";$updates=New-Object -ComObject Microsoft.Update.UpdateColl;foreach($u in $r.Updates){[void]$updates.Add($u)}"
+        script = (
+            "$s=New-Object -ComObject Microsoft.Update.Session;"
+            "$searcher=$s.CreateUpdateSearcher();"
+            "$r=$searcher.Search(\"IsInstalled=0 and Type='Software'\");"
+            f"{filter_clause};"
+            "$down=$s.CreateUpdateDownloader();$down.Updates=$updates;$res=$down.Download();"
+            "$res | ConvertTo-Json -Depth 6"
+        )
+        rc, out = _run_powershell(script, timeout=3600)
+        success = rc == 0
+        if success:
+            WSUS_CACHE["status"] = "idle"
+        else:
+            WSUS_CACHE["status"] = "error"
+            WSUS_CACHE["last_error"] = out
+        return {"success": success, "output": out}
+
+    ok, msg = run_async_job("wsus_download", _task, update_ids)
     if not ok:
         return jsonify({"error": msg}), 409
     return jsonify({"status": "started"})
@@ -428,12 +979,19 @@ def wsus_status():
     if not IS_WINDOWS:
         return jsonify({"error": "WSUS is only available on Windows agents"}), 400
     rc, out = _run_powershell("Get-Service wuauserv | Select-Object Status,StartType,Name | ConvertTo-Json -Depth 4", timeout=30)
-    if rc != 0:
-        return jsonify({"error": out}), 500
-    try:
-        return jsonify({"service": json.loads(out)})
-    except Exception:
-        return jsonify({"service_raw": out})
+    service_payload = None
+    if rc == 0:
+        try:
+            service_payload = json.loads(out)
+        except Exception:
+            service_payload = {"raw": out}
+    return jsonify({
+        "service": service_payload,
+        "status": WSUS_CACHE.get("status"),
+        "pending_count": len(WSUS_CACHE.get("pending") or []),
+        "last_scan": WSUS_CACHE.get("last_scan"),
+        "last_error": WSUS_CACHE.get("last_error"),
+    })
 
 # === PACKAGE LISTING ===
 
@@ -444,6 +1002,7 @@ def packages_installed():
 
 
 @app.route("/packages/refresh", methods=["POST"])
+@_require_auth
 def packages_refresh():
     """Refresh package cache."""
     rc, out = pkg_mgr.refresh()
@@ -458,46 +1017,425 @@ def packages_upgradable():
 
 
 @app.route("/packages/uris", methods=["POST"])
+@_require_auth
 def packages_uris():
-    """Return download URIs for specified packages using apt-get --print-uris (works offline from cache)."""
+    """Return download URIs for specified packages. Supports apt (deb) and dnf/yum (rpm)."""
     data = request.get_json(silent=True) or {}
     pkg_names = data.get("packages", [])
-    if pkg_names:
-        cmd = ["apt-get", "--print-uris", "-y", "install"] + pkg_names
-    else:
-        cmd = ["apt-get", "--print-uris", "-y", "upgrade"]
-    rc, out = run_cmd(cmd, timeout=60)
     uris = []
-    for line in out.strip().splitlines():
-        # URI lines look like: 'http://archive.ubuntu.com/.../pkg_ver_arch.deb' pkg_ver_arch.deb 12345 SHA256:...
-        line = line.strip()
-        if not line.startswith("'") or not ".deb" in line:
-            continue
-        parts = line.split(" ")
-        if len(parts) >= 3:
-            url = parts[0].strip("'")
-            filename = parts[1]
-            size = parts[2] if len(parts) > 2 else "0"
-            uris.append({"url": url, "filename": filename, "size": size})
+
+    if isinstance(pkg_mgr, AptManager):
+        cmd = ["apt-get", "--print-uris", "-y", "install"] + pkg_names if pkg_names else \
+              ["apt-get", "--print-uris", "-y", "upgrade"]
+        rc, out = run_cmd(cmd, timeout=60)
+        for line in out.strip().splitlines():
+            line = line.strip()
+            if not line.startswith("'") or ".deb" not in line:
+                continue
+            parts = line.split(" ")
+            if len(parts) >= 2:
+                url = parts[0].strip("'")
+                filename = parts[1]
+                size = parts[2] if len(parts) > 2 else "0"
+                uris.append({"url": url, "filename": filename, "size": size})
+
+    elif isinstance(pkg_mgr, DnfManager):
+        # dnf download --url prints download URLs to stdout
+        targets = pkg_names if pkg_names else []
+        if not targets:
+            # Get list of upgradable packages first
+            upgradable = pkg_mgr.list_upgradable()
+            targets = [p["name"] for p in upgradable]
+        if targets:
+            rc, out = run_cmd(["dnf", "download", "--url", "--resolve"] + targets, timeout=60)
+            for line in out.strip().splitlines():
+                line = line.strip()
+                if line.startswith("http://") or line.startswith("https://"):
+                    filename = line.split("/")[-1]
+                    uris.append({"url": line, "filename": filename, "size": "0"})
+
     return jsonify({"uris": uris, "count": len(uris)})
 
 
-# === SNAPSHOTS (OS-agnostic metadata) ===
+# === SNAPSHOTS (packages / services / full-system images) ===
 
-def _create_snapshot(name=None):
+def _capture_services(selected=None):
+    data = {"services": []}
+    try:
+        if IS_WINDOWS:
+            # Use PowerShell for structured output
+            cmd = ["powershell", "-Command", "Get-Service | Select Name,Status,StartType | ConvertTo-Json -Compress"]
+            rc, out = run_cmd(cmd, timeout=60)
+            if rc == 0:
+                data["services"] = json.loads(out)
+        else:
+            cmd = ["systemctl", "list-unit-files", "--type=service", "--no-legend", "--no-pager"]
+            rc, out = run_cmd(cmd, timeout=60)
+            if rc == 0:
+                for line in out.splitlines():
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        data["services"].append({"name": parts[0], "state": parts[1]})
+        if selected:
+            sel_lower = {s.lower() for s in selected}
+            data["services"] = [s for s in data["services"] if s.get("name","").lower() in sel_lower]
+    except Exception as e:
+        data["error"] = str(e)
+    return data
+
+
+def _bytes_to_human(value):
+    num = float(max(int(value or 0), 0))
+    units = ["B", "KB", "MB", "GB", "TB"]
+    idx = 0
+    while num >= 1024 and idx < len(units) - 1:
+        num /= 1024.0
+        idx += 1
+    return f"{num:.1f} {units[idx]}"
+
+
+def _resolve_windows_backup_target(windows_backup_target=None):
+    target = (windows_backup_target or os.getenv("PM_WINDOWS_WBADMIN_TARGET") or os.getenv("WBADMIN_BACKUP_TARGET") or "").strip()
+    if target:
+        return target
+    ps_pick = (
+        "Get-Volume | Where-Object { $_.DriveLetter -and $_.DriveLetter -ne 'C' "
+        "-and $_.DriveType -eq 'Fixed' -and $_.SizeRemaining -gt 10737418240 } "
+        "| Sort-Object SizeRemaining -Descending "
+        "| Select-Object -ExpandProperty DriveLetter | ConvertTo-Json -Compress"
+    )
+    rc_pick, out_pick = run_cmd(["powershell", "-Command", ps_pick], timeout=30)
+    if rc_pick == 0 and out_pick.strip():
+        try:
+            parsed = json.loads(out_pick)
+            if isinstance(parsed, list) and parsed:
+                return f"{parsed[0]}:"
+            if isinstance(parsed, str) and parsed:
+                return f"{parsed}:"
+        except Exception:
+            return ""
+    return ""
+
+
+def _windows_target_free_bytes(target):
+    raw = (target or "").strip()
+    if len(raw) >= 2 and raw[1] == ":":
+        drive_path = f"{raw[0]}:\\"
+        try:
+            return shutil.disk_usage(drive_path).free
+        except Exception:
+            return None
+    ps = (
+        "$t='{target}'; "
+        "if (-not (Test-Path -LiteralPath $t)) {{ Write-Output ''; exit 0 }}; "
+        "$item = Get-Item -LiteralPath $t; "
+        "if ($item -and $item.PSDrive) {{ "
+        "  [Console]::WriteLine(($item.PSDrive.Free | ConvertTo-Json -Compress)) "
+        "}} else {{ Write-Output '' }}"
+    ).format(target=raw.replace("'", "''"))
+    rc, out = run_cmd(["powershell", "-Command", ps], timeout=20)
+    if rc != 0 or not out.strip():
+        return None
+    try:
+        parsed = json.loads(out.strip())
+        return int(parsed)
+    except Exception:
+        try:
+            return int(out.strip())
+        except Exception:
+            return None
+
+
+def _parse_wbadmin_versions(output):
+    versions = []
+    for line in (output or "").splitlines():
+        match = re.search(r"Version identifier:\s*(.+)", line, re.IGNORECASE)
+        if match:
+            versions.append(match.group(1).strip())
+    return versions
+
+
+def _detect_wbadmin_versions(target):
+    if not target:
+        return []
+    rc, out = run_cmd(["wbadmin", "get", "versions", f"-backuptarget:{target}"], timeout=120)
+    if rc != 0:
+        return []
+    return _parse_wbadmin_versions(out)
+
+
+def _windows_backup_manifest_path(base_path):
+    if os.path.isdir(base_path):
+        return os.path.join(base_path, "full_system_windows.json")
+    return base_path
+
+
+def _write_windows_backup_manifest(path, target, version_identifier="", command_output="", backup_mode="full_system"):
+    manifest = {
+        "kind": "windows_wbadmin_backup",
+        "backup_mode": backup_mode,
+        "backup_target": target,
+        "version_identifier": version_identifier or "",
+        "created_at": datetime.now().isoformat(),
+        "command_output": (command_output or "")[:800],
+    }
+    with open(path, "w") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
+
+
+def _load_windows_backup_manifest(path):
+    manifest_path = _windows_backup_manifest_path(path)
+    if not os.path.exists(manifest_path):
+        return None
+    with open(manifest_path) as f:
+        data = json.load(f)
+    if data.get("kind") not in ("", "windows_wbadmin_backup", None) and "backup_target" not in data:
+        return None
+    if not data.get("backup_target"):
+        return None
+    return data
+
+
+def _resolve_windows_restore_manifest(source_path):
+    manifest = _load_windows_backup_manifest(source_path)
+    if not manifest:
+        return None, None
+    return manifest, _windows_backup_manifest_path(source_path)
+
+
+def _restore_windows_backup_manifest(path, target_override=None):
+    manifest = _load_windows_backup_manifest(path)
+    if not manifest:
+        return {"success": False, "error": "Windows backup manifest not found"}
+
+    target = (target_override or manifest.get("backup_target") or "").strip()
+    if not target:
+        return {"success": False, "error": "Windows backup target is missing from manifest"}
+
+    version = str(manifest.get("version_identifier") or "").strip()
+    if not version:
+        versions = _detect_wbadmin_versions(target)
+        version = versions[0] if versions else ""
+    if not version:
+        return {"success": False, "error": f"No wbadmin version found at {target}", "backup_target": target}
+
+    attempts = []
+    commands = [
+        ["wbadmin", "start", "sysrecovery", f"-version:{version}", f"-backuptarget:{target}", "-quiet"],
+        ["wbadmin", "start", "systemstaterecovery", f"-version:{version}", f"-backuptarget:{target}", "-quiet"],
+    ]
+    for command in commands:
+        rc, out = run_cmd(command, timeout=7200)
+        attempts.append({
+            "command": " ".join(command),
+            "rc": rc,
+            "output": out[:800],
+        })
+        if rc == 0:
+            return {
+                "success": True,
+                "backup_target": target,
+                "version": version,
+                "output": out[:800],
+                "attempts": attempts,
+            }
+
+    return {
+        "success": False,
+        "error": "wbadmin restore failed",
+        "backup_target": target,
+        "version": version,
+        "attempts": attempts,
+    }
+
+
+def _windows_package_identity(pkg):
+    raw = str((pkg or {}).get("id") or (pkg or {}).get("name") or "").strip().lower()
+    return raw or None
+
+
+def _windows_install_snapshot_package(pkg):
+    package_id = str((pkg or {}).get("id") or "").strip()
+    package_name = str((pkg or {}).get("name") or "").strip()
+    version = str((pkg or {}).get("version") or "").strip()
+    if package_id:
+        cmd = [
+            "winget", "install", "--id", package_id, "--exact", "--silent",
+            "--accept-package-agreements", "--accept-source-agreements",
+        ]
+        if version:
+            cmd += ["--version", version, "--force"]
+        return run_cmd(cmd, timeout=900)
+    if package_name:
+        cmd = [
+            "winget", "install", "--name", package_name, "--exact", "--silent",
+            "--accept-package-agreements", "--accept-source-agreements",
+        ]
+        if version:
+            cmd += ["--version", version, "--force"]
+        return run_cmd(cmd, timeout=900)
+    return 1, "No Windows package identifier available"
+
+
+def _windows_remove_snapshot_package(pkg):
+    package_id = str((pkg or {}).get("id") or "").strip()
+    package_name = str((pkg or {}).get("name") or "").strip()
+    if package_id:
+        return run_cmd(["winget", "uninstall", "--id", package_id, "--exact", "--silent"], timeout=900)
+    if package_name:
+        return run_cmd(["winget", "uninstall", "--name", package_name, "--exact", "--silent"], timeout=900)
+    return 1, "No Windows package identifier available"
+
+
+def _snapshot_precheck(mode="packages", windows_backup_target=None):
+    normalized_mode = str(mode or "packages").strip().lower()
+    pre = {
+        "ok": True,
+        "mode": normalized_mode,
+        "os": platform.system(),
+        "checks": [],
+    }
+    try:
+        snap_usage = shutil.disk_usage(SNAPSHOT_DIR)
+        pre["checks"].append({
+            "name": "snapshot_storage",
+            "path": SNAPSHOT_DIR,
+            "free_bytes": snap_usage.free,
+            "free_human": _bytes_to_human(snap_usage.free),
+        })
+    except Exception as e:
+        pre["checks"].append({"name": "snapshot_storage", "error": str(e)})
+    if normalized_mode != "full_system":
+        return pre
+    if IS_WINDOWS:
+        target = _resolve_windows_backup_target(windows_backup_target)
+        if not target:
+            pre["ok"] = False
+            pre["error_code"] = "no_backup_target"
+            pre["error"] = "No writable backup target available for Windows full-system image"
+            return pre
+        free_bytes = _windows_target_free_bytes(target)
+        min_required = int((os.getenv("PM_WINDOWS_FULL_SNAPSHOT_MIN_FREE_BYTES") or "21474836480").strip())
+        check = {
+            "name": "windows_backup_target",
+            "target": target,
+            "required_bytes": min_required,
+            "required_human": _bytes_to_human(min_required),
+            "free_bytes": free_bytes,
+            "free_human": _bytes_to_human(free_bytes) if isinstance(free_bytes, int) else "unknown",
+        }
+        pre["checks"].append(check)
+        pre["backup_target"] = target
+        if isinstance(free_bytes, int) and free_bytes < min_required:
+            pre["ok"] = False
+            pre["error_code"] = "no_space"
+            pre["error"] = f"Not enough free space on backup target {target}"
+        return pre
+    root_usage = shutil.disk_usage("/")
+    estimated_image = max(int(root_usage.used * 0.35), 8 * 1024 * 1024 * 1024)
+    min_required = int(max(int(estimated_image * 1.2), int((os.getenv("PM_LINUX_FULL_SNAPSHOT_MIN_FREE_BYTES") or "21474836480").strip())))
+    pre["checks"].append({
+        "name": "linux_full_system_space",
+        "path": "/",
+        "required_bytes": min_required,
+        "required_human": _bytes_to_human(min_required),
+        "estimated_image_bytes": estimated_image,
+        "estimated_image_human": _bytes_to_human(estimated_image),
+        "free_bytes": root_usage.free,
+        "free_human": _bytes_to_human(root_usage.free),
+    })
+    if root_usage.free < min_required:
+        pre["ok"] = False
+        pre["error_code"] = "no_space"
+        pre["error"] = "Not enough free disk space for Linux full-system image"
+    return pre
+
+
+def _full_system_image(name, snap_dir, windows_backup_target=None):
+    image_path = os.path.join(snap_dir, "full_image.tar.gz")
+    if IS_WINDOWS:
+        target = _resolve_windows_backup_target(windows_backup_target)
+        if not target:
+            raise Exception("No writable backup target available for Windows full_system snapshot. Set PM_WINDOWS_WBADMIN_TARGET or attach writable drive/share.")
+        versions_before = set(_detect_wbadmin_versions(target))
+        cmd = ["wbadmin", "start", "backup", f"-backupTarget:{target}", "-allCritical", "-quiet"]
+        rc, out = run_cmd(cmd, timeout=7200)
+        if rc != 0:
+            raise Exception(f"wbadmin failed: {out[:400]}")
+        versions_after = _detect_wbadmin_versions(target)
+        version_identifier = next((v for v in versions_after if v not in versions_before), versions_after[0] if versions_after else "")
+        manifest_path = _windows_backup_manifest_path(snap_dir)
+        _write_windows_backup_manifest(
+            manifest_path,
+            target,
+            version_identifier=version_identifier,
+            command_output=out,
+            backup_mode="full_system",
+        )
+        return {
+            "manifest_path": manifest_path,
+            "backup_target": target,
+            "version_identifier": version_identifier,
+            "image_size_bytes": os.path.getsize(manifest_path) if os.path.exists(manifest_path) else 0,
+        }
+    else:
+        tmp_path = f"/tmp/{name}_full.tar.gz"
+        cmd = [
+            "tar", "czf", tmp_path,
+            "--exclude=/proc", "--exclude=/sys", "--exclude=/dev",
+            "--exclude=/tmp", "--exclude=/run", "--exclude=/mnt",
+            "--exclude=/media", "--exclude=/lost+found",
+            "--exclude=/var/lib/patch-agent/snapshots",
+            "/"
+        ]
+        rc, out = run_cmd(cmd, timeout=7200)
+        if rc != 0:
+            raise Exception(f"Full system image failed: {out[:400]}")
+        shutil.move(tmp_path, image_path)
+        return os.path.getsize(image_path)
+
+
+def _create_snapshot(name=None, mode="packages", selected_services=None, windows_backup_target=None):
     if not name:
-        name = f"snap-{int(time.time())}"
+        # Bug #11 fix: use uuid suffix to prevent name collision when two snapshots
+        # are created within the same second (e.g. concurrent requests)
+        name = f"snap-{int(time.time())}-{uuid.uuid4().hex[:8]}"
+    mode = mode or "packages"
     snap_dir = os.path.join(SNAPSHOT_DIR, name)
     os.makedirs(snap_dir, exist_ok=True)
-    result = {"name": name, "path": snap_dir, "success": False, "details": {}}
+    result = {
+        "name": name,
+        "path": snap_dir,
+        "mode": mode,
+        "success": False,
+        "status": "running",
+        "started_at": datetime.now().isoformat(),
+        "details": {},
+    }
+    precheck = _snapshot_precheck(mode=mode, windows_backup_target=windows_backup_target)
+    result["precheck"] = precheck
+    if not precheck.get("ok", True):
+        result["status"] = "failed"
+        result["error"] = precheck.get("error") or "Snapshot precheck failed"
+        result["error_code"] = precheck.get("error_code") or "precheck_failed"
+        record_job({"type": "snapshot", **result})
+        return result
     try:
-        # Save current package list
+        # Save current package list (always)
         packages = pkg_mgr.list_installed()
         with open(os.path.join(snap_dir, "packages.json"), "w") as f:
             json.dump(packages, f, indent=2)
         result["details"]["packages_count"] = len(packages)
 
-        # OS-specific repo/source configs
+        # Services snapshot (all or selected)
+        if mode in ("services", "selected_services", "full_system"):
+            svc = _capture_services(selected_services if mode=="selected_services" else None)
+            with open(os.path.join(snap_dir, "services.json"), "w") as f:
+                json.dump(svc, f, indent=2)
+            result["details"]["services_count"] = len(svc.get("services", []))
+
+        # OS-specific repo/source configs for Linux
         if not IS_WINDOWS:
             sources_dir = os.path.join(snap_dir, "sources")
             os.makedirs(sources_dir, exist_ok=True)
@@ -510,17 +1448,74 @@ def _create_snapshot(name=None):
                 for rf in os.listdir("/etc/yum.repos.d"):
                     shutil.copy2(os.path.join("/etc/yum.repos.d", rf), sources_dir)
 
-        meta = {"name": name, "created": datetime.now().isoformat(), "packages_count": result["details"].get("packages_count", 0), "os": platform.system()}
+        # Full system image (optional)
+        image_size = 0
+        if mode == "full_system":
+            if IS_WINDOWS:
+                try:
+                    image_meta = _full_system_image(name, snap_dir, windows_backup_target=windows_backup_target)
+                    image_size = int(image_meta.get("image_size_bytes") or 0)
+                    result["details"]["image_path"] = image_meta.get("manifest_path")
+                    result["details"]["image_size_bytes"] = image_size
+                    if image_meta.get("backup_target"):
+                        result["details"]["backup_target"] = image_meta["backup_target"]
+                    if image_meta.get("version_identifier"):
+                        result["details"]["version_identifier"] = image_meta["version_identifier"]
+                except Exception as e:
+                    fallback_enabled = (os.getenv("PM_WINDOWS_FULL_SNAPSHOT_FALLBACK", "1") or "1").strip() != "0"
+                    if not fallback_enabled:
+                        raise e
+                    result["details"]["full_system_error"] = str(e)
+                    result["details"]["fallback_mode"] = "packages"
+                    result["details"]["warning"] = "Full-system image failed; snapshot saved in packages mode"
+                    result["mode"] = "packages"
+                    result["status"] = "degraded"
+                    mode = "packages"
+            else:
+                image_size = _full_system_image(name, snap_dir)
+                result["details"]["image_path"] = os.path.join(snap_dir, "full_image.tar.gz")
+                result["details"]["image_size_bytes"] = image_size
+
+        meta = {
+            "name": name,
+            "created": datetime.now().isoformat(),
+            "packages_count": result["details"].get("packages_count", 0),
+            "services_count": result["details"].get("services_count", 0),
+            "mode": mode,
+            "os": platform.system(),
+            "image_size_bytes": image_size,
+        }
         with open(os.path.join(snap_dir, "meta.json"), "w") as f:
             json.dump(meta, f, indent=2)
         result["success"] = True
+        if result.get("status") == "running":
+            result["status"] = "success"
         result["created"] = meta["created"]
-        logger.info("Snapshot '%s' created for %s", name, platform.system())
+        logger.info("Snapshot '%s' (%s) created for %s", name, mode, platform.system())
     except Exception as e:
         result["error"] = str(e)
+        result["status"] = "failed"
         logger.error("Snapshot creation failed: %s", e)
     record_job({"type": "snapshot", **result})
     return result
+
+
+def _restore_full_snapshot(meta, snap_dir):
+    if IS_WINDOWS:
+        manifest_path = _windows_backup_manifest_path(snap_dir)
+        if not os.path.exists(manifest_path):
+            return {"success": False, "error": "Windows full-system backup manifest not found"}
+        try:
+            return _restore_windows_backup_manifest(manifest_path)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    img_path = os.path.join(snap_dir, "full_image.tar.gz")
+    if not os.path.exists(img_path):
+        return {"success": False, "error": "Full image not found"}
+    # Linux restore (dangerous): untar to /
+    cmd = ["tar", "xzf", img_path, "-C", "/", "--numeric-owner", "--overwrite"]
+    rc, out = run_cmd(cmd, timeout=7200)
+    return {"success": rc == 0, "rc": rc, "output": out[:800]}
 
 
 def _rollback_snapshot(name):
@@ -530,23 +1525,85 @@ def _rollback_snapshot(name):
         result["error"] = f"Snapshot '{name}' not found"
         return result
     try:
-        # Rollback logic varies by OS. 
-        # For Linux, we attempt a full system upgrade to 'last known good' if possible.
-        # For Windows, we mostly just record the rollback attempt.
-        if IS_WINDOWS:
-            result["error"] = "Rollback not supported on Windows via this agent."
+        meta_path = os.path.join(snap_dir, "meta.json")
+        meta = {}
+        if os.path.exists(meta_path):
+            with open(meta_path) as f:
+                meta = json.load(f)
+        if meta.get("mode") == "full_system":
+            r = _restore_full_snapshot(meta, snap_dir)
+            result["steps"].append(r)
+            result["success"] = r.get("success", False)
             return result
 
         pkg_mgr.refresh()
-        # On Linux, try to install the package list from snapshot
         packages_file = os.path.join(snap_dir, "packages.json")
         if os.path.exists(packages_file):
             with open(packages_file) as f:
                 old_pkgs = json.load(f)
-            # This is a simplified rollback: just refresh and ensure system is consistent
-            rc, out = pkg_mgr.install([]) # Upgrade all to latest stable
-            result["steps"].append({"step": "system-sync", "rc": rc, "output": out[:500]})
-            result["success"] = (rc == 0)
+            if IS_WINDOWS:
+                current_pkgs = pkg_mgr.list_installed()
+                desired = {key: pkg for pkg in old_pkgs if (key := _windows_package_identity(pkg))}
+                current = {key: pkg for pkg in current_pkgs if (key := _windows_package_identity(pkg))}
+                failures = 0
+                warnings = []
+
+                for key, desired_pkg in desired.items():
+                    current_pkg = current.get(key)
+                    if current_pkg and str(current_pkg.get("version") or "") == str(desired_pkg.get("version") or ""):
+                        continue
+                    rc, out = _windows_install_snapshot_package(desired_pkg)
+                    result["steps"].append({
+                        "step": "reconcile-package",
+                        "package": desired_pkg.get("id") or desired_pkg.get("name"),
+                        "target_version": desired_pkg.get("version", ""),
+                        "rc": rc,
+                        "output": out[:500],
+                    })
+                    if rc != 0:
+                        failures += 1
+
+                for key, current_pkg in current.items():
+                    if key in desired:
+                        continue
+                    rc, out = _windows_remove_snapshot_package(current_pkg)
+                    result["steps"].append({
+                        "step": "remove-extra-package",
+                        "package": current_pkg.get("id") or current_pkg.get("name"),
+                        "rc": rc,
+                        "output": out[:500],
+                    })
+                    if rc != 0:
+                        warnings.append(f"Could not remove {current_pkg.get('id') or current_pkg.get('name')}")
+
+                result["warnings"] = warnings
+                result["success"] = failures == 0
+                if failures:
+                    result["error"] = f"{failures} Windows package rollback action(s) failed"
+                return result
+            # Build a list of "name=version" targets to downgrade/reinstall to snapshot state
+            if isinstance(pkg_mgr, AptManager):
+                targets = [f"{p['name']}={p['version']}" for p in old_pkgs if p.get("name") and p.get("version")]
+                if targets:
+                    # apt-get install with pinned versions will downgrade if needed
+                    rc, out = run_cmd(
+                        ["apt-get", "install", "-y", "--allow-downgrades", "--no-install-recommends"] + targets,
+                        timeout=600
+                    )
+                    result["steps"].append({"step": "downgrade-packages", "rc": rc, "output": out[:500]})
+                    result["success"] = (rc == 0)
+                else:
+                    result["success"] = True
+            elif isinstance(pkg_mgr, DnfManager):
+                targets = [f"{p['name']}-{p['version']}" for p in old_pkgs if p.get("name") and p.get("version")]
+                if targets:
+                    rc, out = run_cmd(["dnf", "downgrade", "-y"] + targets, timeout=600)
+                    result["steps"].append({"step": "downgrade-packages", "rc": rc, "output": out[:500]})
+                    result["success"] = (rc == 0)
+                else:
+                    result["success"] = True
+            else:
+                result["error"] = "Rollback not supported for this package manager"
     except Exception as e:
         result["error"] = str(e)
     record_job({"type": "rollback", **result})
@@ -554,10 +1611,37 @@ def _rollback_snapshot(name):
 
 
 @app.route("/snapshot/create", methods=["POST"])
+@_require_auth
 def api_create_snapshot():
     data = request.get_json(silent=True) or {}
-    result = _create_snapshot(data.get("name"))
+    mode = data.get("mode") or "packages"
+    services = data.get("services") or []
+    backup_target = data.get("backup_target")
+    if isinstance(backup_target, str):
+        backup_target = backup_target.strip()
+    else:
+        backup_target = None
+    result = _create_snapshot(
+        data.get("name"),
+        mode=mode,
+        selected_services=services,
+        windows_backup_target=backup_target,
+    )
     return jsonify(result), 200 if result["success"] else 500
+
+
+@app.route("/snapshot/precheck", methods=["POST"])
+@_require_auth
+def api_snapshot_precheck():
+    data = request.get_json(silent=True) or {}
+    mode = data.get("mode") or "packages"
+    backup_target = data.get("backup_target")
+    if isinstance(backup_target, str):
+        backup_target = backup_target.strip()
+    else:
+        backup_target = None
+    result = _snapshot_precheck(mode=mode, windows_backup_target=backup_target)
+    return jsonify(result), 200 if result.get("ok") else 400
 
 
 @app.route("/snapshot/list", methods=["GET"])
@@ -569,8 +1653,22 @@ def api_list_snapshots():
             if os.path.exists(meta_file):
                 try:
                     with open(meta_file) as f:
-                        snapshots.append(json.load(f))
-                except: pass
+                        meta = json.load(f)
+                    # augment with size if image exists
+                    img_path = os.path.join(SNAPSHOT_DIR, name, "full_image.vhdx")
+                    if not os.path.exists(img_path):
+                        img_path = os.path.join(SNAPSHOT_DIR, name, "full_image.tar.gz")
+                    if os.path.exists(img_path):
+                        meta["image_size_bytes"] = os.path.getsize(img_path)
+                        meta["image_path"] = img_path
+                    else:
+                        manifest_path = _windows_backup_manifest_path(os.path.join(SNAPSHOT_DIR, name))
+                        if os.path.exists(manifest_path):
+                            meta["image_size_bytes"] = os.path.getsize(manifest_path)
+                            meta["image_path"] = manifest_path
+                    snapshots.append(meta)
+                except Exception:
+                    snapshots.append({"name": name, "created": "unknown"})
             else:
                 snapshots.append({"name": name, "created": "unknown"})
     return jsonify({"snapshots": snapshots, "count": len(snapshots)})
@@ -587,16 +1685,20 @@ def _safe_snapshot_name(name):
 
 
 @app.route("/snapshot/rollback", methods=["POST"])
+@_require_auth
 def api_rollback_snapshot():
     data = request.get_json(silent=True) or {}
-    name = _safe_snapshot_name(data.get("name"))
+    # Accept either 'name' directly or 'ref_job_id' (sent by backend rollback endpoint)
+    name = data.get("name") or data.get("ref_job_id")
+    name = _safe_snapshot_name(str(name)) if name else None
     if not name:
-        return jsonify({"error": "valid snapshot name required"}), 400
+        return jsonify({"error": "valid snapshot name or ref_job_id required"}), 400
     result = _rollback_snapshot(name)
     return jsonify(result), 200 if result["success"] else 500
 
 
 @app.route("/snapshot/delete", methods=["POST"])
+@_require_auth
 def api_delete_snapshot():
     data = request.get_json(silent=True) or {}
     name = _safe_snapshot_name(data.get("name"))
@@ -613,41 +1715,102 @@ def api_delete_snapshot():
 
 # === PATCH EXECUTION with snapshot + rollback ===
 
-def _run_patch_task(packages, hold, dry_run, auto_snapshot, auto_rollback):
+def _run_patch_task(packages, hold, dry_run, auto_snapshot, auto_rollback,
+                    security_only=False, exclude_kernel=False, auto_reboot=False,
+                    pre_patch_script=None, post_patch_script=None, extra_flags=None):
     patch_gauge.set(1)
-    result = {"success": False, "snapshot": None, "patch_output": "", "rollback": None, "dry_run": dry_run}
+    result = {
+        "success": False, "snapshot": None, "patch_output": "", "rollback": None,
+        "dry_run": dry_run, "reboot_required": False, "pre_script_output": "",
+        "post_script_output": "", "verification": {}
+    }
     try:
+        # Pre-patch script
+        if pre_patch_script and not dry_run:
+            rc_pre, out_pre = run_cmd(["bash", "-c", pre_patch_script], timeout=120)
+            result["pre_script_output"] = out_pre
+            if rc_pre != 0:
+                result["error"] = f"Pre-patch script failed (rc={rc_pre}): {out_pre[:500]}"
+                patch_gauge.set(3)
+                return result
+
         if auto_snapshot and not dry_run:
-            snap_result = _create_snapshot(f"pre-patch-{int(time.time())}")
+            snap_result = _create_snapshot(f"pre-patch-{int(time.time())}-{uuid.uuid4().hex[:8]}")
             result["snapshot"] = snap_result
-        
+
         # Hold packages (Apt only for now)
         if hasattr(pkg_mgr, 'hold'):
             for pkg in hold: run_cmd(["apt-mark", "hold", pkg])
-        
+
+        # Capture versions before patch for verification
+        before_versions = {}
+        if packages and not dry_run:
+            for pkg in packages:
+                installed = pkg_mgr.list_installed()
+                match = next((p for p in installed if p["name"] == pkg), None)
+                if match:
+                    before_versions[pkg] = match.get("version", "")
+
         pkg_mgr.refresh()
-        rc, out = pkg_mgr.install(packages) if packages else pkg_mgr.install([])
+        rc, out = pkg_mgr.install(
+            packages,
+            security_only=security_only,
+            exclude_kernel=exclude_kernel,
+            extra_flags=extra_flags or [],
+        )
         result["patch_output"] += out
         patch_success = (rc == 0)
-        
+
         if hasattr(pkg_mgr, 'unhold'):
             for pkg in hold: run_cmd(["apt-mark", "unhold", pkg])
-            
+
+        # Post-patch verification: check versions changed
+        if patch_success and packages and not dry_run:
+            after_installed = pkg_mgr.list_installed()
+            after_map = {p["name"]: p.get("version", "") for p in after_installed}
+            verification = {}
+            for pkg in packages:
+                before = before_versions.get(pkg, "")
+                after = after_map.get(pkg, "")
+                verification[pkg] = {
+                    "before": before, "after": after,
+                    "updated": bool(after and after != before)
+                }
+            result["verification"] = verification
+
         if not patch_success and auto_rollback and not dry_run:
             if result.get("snapshot", {}).get("success"):
                 rb = _rollback_snapshot(result["snapshot"]["name"])
                 result["rollback"] = rb
-        
+                record_job({"type": "patch_rollback", "patch_snapshot": result["snapshot"]["name"], **rb})
+
         result["success"] = patch_success
         patch_gauge.set(2 if patch_success else 3)
         if patch_success:
             last_patch_ts.set(time.time())
+
+        # Post-patch script
+        if post_patch_script and patch_success and not dry_run:
+            rc_post, out_post = run_cmd(["bash", "-c", post_patch_script], timeout=120)
+            result["post_script_output"] = out_post
+
+        # Reboot check
+        checker = getattr(pkg_mgr, "check_reboot", None)
+        if callable(checker):
+            result["reboot_required"] = bool(checker())
+        if result["reboot_required"] and auto_reboot and patch_success and not dry_run:
+            result["reboot_scheduled"] = True
+            threading.Timer(10.0, lambda: run_cmd(
+                ["shutdown", "/r", "/t", "30"] if IS_WINDOWS else ["shutdown", "-r", "+1"]
+            )).start()
+
     except Exception as e:
         result["error"] = str(e)
         patch_gauge.set(3)
     return result
 
 @app.route("/patch/execute", methods=["POST"])
+@_require_auth
 def execute_patch():
     data = request.get_json(silent=True) or {}
     _valid_pkg = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9.+\-_]+$')
@@ -656,8 +1819,19 @@ def execute_patch():
     dry_run = data.get("dry_run", False)
     auto_snapshot = data.get("auto_snapshot", True)
     auto_rollback = data.get("auto_rollback", True)
+    security_only = bool(data.get("security_only", False))
+    exclude_kernel = bool(data.get("exclude_kernel", False))
+    auto_reboot = bool(data.get("auto_reboot", False))
+    pre_patch_script = str(data.get("pre_patch_script") or "").strip() or None
+    post_patch_script = str(data.get("post_patch_script") or "").strip() or None
+    extra_flags = [str(f) for f in (data.get("extra_flags") or []) if isinstance(f, str) and f.strip().startswith("-")]
 
-    ok, msg = run_async_job("patch", _run_patch_task, packages, hold, dry_run, auto_snapshot, auto_rollback)
+    ok, msg = run_async_job(
+        "patch", _run_patch_task,
+        packages, hold, dry_run, auto_snapshot, auto_rollback,
+        security_only, exclude_kernel, auto_reboot,
+        pre_patch_script, post_patch_script, extra_flags,
+    )
     if not ok: return jsonify({"error": msg}), 409
     return jsonify({"status": "started", "job": "patch"})
 
@@ -665,23 +1839,42 @@ def execute_patch():
 # === OFFLINE PATCHING ===
 
 @app.route("/offline/upload", methods=["POST"])
+@_require_auth
 def offline_upload():
-    files = request.files.getlist("file")
-    if not files:
-        return jsonify({"error": "no files provided"}), 400
-    saved = []
-    # Support .deb, .rpm, .msi, .exe
-    valid_exts = (".deb", ".rpm", ".msi", ".exe")
-    for f in files:
-        if not f.filename or not any(f.filename.lower().endswith(ext) for ext in valid_exts):
-            continue
-        safe_name = os.path.basename(f.filename)
-        dest = os.path.join(OFFLINE_DIR, safe_name)
-        if not os.path.realpath(dest).startswith(os.path.realpath(OFFLINE_DIR)):
-            continue
-        f.save(dest)
-        saved.append(safe_name)
-    return jsonify({"uploaded": saved, "count": len(saved), "path": OFFLINE_DIR})
+    try:
+        files = request.files.getlist("file")
+        if not files:
+            logger.warning("offline_upload: no files provided in request")
+            return jsonify({"error": "no files provided"}), 400
+        
+        # Ensure OFFLINE_DIR exists
+        os.makedirs(OFFLINE_DIR, exist_ok=True)
+        
+        saved = []
+        # Support .deb, .rpm, .msi, .exe
+        valid_exts = (".deb", ".rpm", ".msi", ".exe")
+        for f in files:
+            if not f.filename or not any(f.filename.lower().endswith(ext) for ext in valid_exts):
+                logger.warning(f"offline_upload: skipping invalid file {f.filename}")
+                continue
+            safe_name = os.path.basename(f.filename)
+            dest = os.path.join(OFFLINE_DIR, safe_name)
+            if not os.path.realpath(dest).startswith(os.path.realpath(OFFLINE_DIR)):
+                logger.warning(f"offline_upload: path traversal attempt blocked for {safe_name}")
+                continue
+            try:
+                f.save(dest)
+                saved.append(safe_name)
+                logger.info(f"offline_upload: saved {safe_name} ({os.path.getsize(dest)} bytes)")
+            except Exception as save_err:
+                logger.error(f"offline_upload: failed to save {safe_name}: {save_err}")
+                continue
+        
+        logger.info(f"offline_upload: successfully saved {len(saved)} file(s) to {OFFLINE_DIR}")
+        return jsonify({"uploaded": saved, "count": len(saved), "path": OFFLINE_DIR})
+    except Exception as e:
+        logger.error(f"offline_upload: unexpected error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/offline/list", methods=["GET"])
@@ -694,27 +1887,45 @@ def offline_list():
     return jsonify({"pkgs": pkgs, "count": len(pkgs)})
 
 
-def _run_offline_task(pkg_files, auto_snapshot, auto_rollback):
+def _run_offline_task(pkg_files, auto_snapshot, auto_rollback, auto_reboot=False, post_patch_script=None):
     patch_gauge.set(1)
-    result = {"success": False, "snapshot": None, "install_output": "", "rollback": None, "files": [os.path.basename(f) for f in pkg_files]}
+    result = {"success": False, "snapshot": None, "install_output": "", "rollback": None,
+              "files": [os.path.basename(f) for f in pkg_files], "reboot_required": False,
+              "post_script_output": ""}
     try:
         if auto_snapshot:
-            snap = _create_snapshot(f"pre-offline-{int(time.time())}")
+            snap = _create_snapshot(f"pre-offline-{int(time.time())}-{uuid.uuid4().hex[:8]}")
             result["snapshot"] = snap
-        
+
         rc, out = pkg_mgr.install(pkg_files, local=True)
         result["install_output"] += out
-        
+
         patch_success = (rc == 0)
         if not patch_success and auto_rollback:
             if result.get("snapshot", {}).get("success"):
                 rb = _rollback_snapshot(result["snapshot"]["name"])
                 result["rollback"] = rb
-                
+
         result["success"] = patch_success
         patch_gauge.set(2 if patch_success else 3)
         if patch_success:
             last_patch_ts.set(time.time())
+
+        # Post-install script
+        if post_patch_script and patch_success:
+            rc_post, out_post = run_cmd(["bash", "-c", post_patch_script], timeout=120)
+            result["post_script_output"] = out_post
+
+        # Reboot check
+        checker = getattr(pkg_mgr, "check_reboot", None)
+        if callable(checker):
+            result["reboot_required"] = bool(checker())
+        if result["reboot_required"] and auto_reboot and patch_success:
+            result["reboot_scheduled"] = True
+            threading.Timer(10.0, lambda: run_cmd(
+                ["shutdown", "/r", "/t", "30"] if IS_WINDOWS else ["shutdown", "-r", "+1"]
+            )).start()
+
     except Exception as e:
         result["error"] = str(e)
         patch_gauge.set(3)
@@ -722,12 +1933,15 @@ def _run_offline_task(pkg_files, auto_snapshot, auto_rollback):
 
 
 @app.route("/offline/install", methods=["POST"])
+@_require_auth
 def offline_install():
     data = request.get_json(silent=True) or {}
     auto_snapshot = data.get("auto_snapshot", True)
     auto_rollback = data.get("auto_rollback", True)
+    auto_reboot = bool(data.get("auto_reboot", False))
+    post_patch_script = str(data.get("post_patch_script") or "").strip() or None
     selected = data.get("files", [])
-    
+
     pkg_files = []
     if selected:
         for f in selected:
@@ -738,30 +1952,28 @@ def offline_install():
     else:
         for ext in ("*.deb", "*.rpm", "*.msi", "*.exe"):
             pkg_files.extend(glob.glob(os.path.join(OFFLINE_DIR, ext)))
-            
+
     if not pkg_files:
         return jsonify({"error": "no package files found"}), 400
 
-    ok, msg = run_async_job("offline_install", _run_offline_task, pkg_files, auto_snapshot, auto_rollback)
+    ok, msg = run_async_job("offline_install", _run_offline_task, pkg_files, auto_snapshot, auto_rollback, auto_reboot, post_patch_script)
     if not ok: return jsonify({"error": msg}), 409
     return jsonify({"status": "started", "job": "offline_install"})
 
 
 
 @app.route("/offline/clear", methods=["POST"])
+@_require_auth
 def offline_clear():
     removed = []
-    for f in glob.glob(os.path.join(OFFLINE_DIR, "*.deb")):
-        os.remove(f)
-        removed.append(os.path.basename(f))
+    for ext in ("*.deb", "*.rpm", "*.msi", "*.exe"):
+        for f in glob.glob(os.path.join(OFFLINE_DIR, ext)):
+            os.remove(f)
+            removed.append(os.path.basename(f))
     return jsonify({"cleared": removed, "count": len(removed)})
 
 
 # === BASIC ROUTES ===
-
-@app.route("/health")
-def health():
-    return jsonify({"status": "ok", "state": JOB_STATUS["state"]})
 
 @app.route("/status")
 def status():
@@ -781,7 +1993,13 @@ def job_history():
         except: pass
     return jsonify({"history": jobs[-100:][::-1]})
 
+
+@app.route("/history")
+def history_alias():
+    return job_history()
+
 @app.route("/snapshot/archive/<name>", methods=["GET"])
+@_require_auth
 def archive_snapshot(name):
     """Zip a snapshot directory and return it."""
     safe_name = _safe_snapshot_name(name)
@@ -801,7 +2019,63 @@ def archive_snapshot(name):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/snapshot/restore_upload", methods=["POST"])
+@_require_auth
+def restore_upload():
+    """Upload a snapshot zip and restore it."""
+    if 'file' not in request.files:
+        return jsonify({"error": "file required"}), 400
+    f = request.files['file']
+    name = request.form.get("name") or Path(secure_filename(f.filename)).stem
+    safe_name = _safe_snapshot_name(name)
+    if not safe_name:
+        return jsonify({"error": "Invalid snapshot name"}), 400
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zip")
+    os.close(tmp_fd)
+    f.save(tmp_path)
+    snap_dir = os.path.join(SNAPSHOT_DIR, safe_name)
+    os.makedirs(snap_dir, exist_ok=True)
+    try:
+        with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
+            _safe_extract_zip(zip_ref, os.path.join(SNAPSHOT_DIR))
+        res = _rollback_snapshot(safe_name)
+    except Exception as e:
+        res = {"success": False, "error": str(e)}
+    finally:
+        os.remove(tmp_path)
+    return jsonify(res), 200 if res.get("success") else 500
+
+@app.route("/snapshot/restore_url", methods=["POST"])
+@_require_auth
+def restore_url():
+    data = request.get_json(silent=True) or {}
+    url = data.get("url")
+    name = data.get("name")
+    if not url:
+        return jsonify({"error": "url required"}), 400
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zip")
+    os.close(tmp_fd)
+    try:
+        urllib.request.urlretrieve(url, tmp_path)
+        if not name:
+            name = Path(url).stem or f"imported-{int(time.time())}"
+        safe_name = _safe_snapshot_name(name)
+        if not safe_name:
+            return jsonify({"error": "Invalid name"}), 400
+        snap_dir = os.path.join(SNAPSHOT_DIR, safe_name)
+        os.makedirs(snap_dir, exist_ok=True)
+        with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
+            _safe_extract_zip(zip_ref, os.path.join(SNAPSHOT_DIR))
+        res = _rollback_snapshot(safe_name)
+        return jsonify(res), 200 if res.get("success") else 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        try: os.remove(tmp_path)
+        except: pass
+
 @app.route("/cleanup", methods=["POST"])
+@_require_auth
 def cleanup_resources():
     """Delete old snapshots and offline packages."""
     data = request.get_json(silent=True) or {}
@@ -837,25 +2111,8 @@ def cleanup_resources():
     })
 
 
-@app.route("/job/status", methods=["GET"])
-def get_job_status():
-    """Return status of the current or last job."""
-    # Simple in-memory status tracking for now
-    # In a real agent, this would check a job queue or database
-    
-    # We'll use the Prometheus gauge to infer status for this simple implementation
-    # 0=idle, 1=running, 2=success, 3=failed
-    status_code = int(patch_gauge._value.get())
-    status_map = {0: "idle", 1: "running", 2: "success", 3: "failed"}
-    state = status_map.get(status_code, "unknown")
-    
-    return jsonify({
-        "state": state,
-        "last_result": "Job completed" if state == "success" else "Job failed" if state == "failed" else "Running..." if state == "running" else "Idle",
-        "timestamp": time.time()
-    })
-
 @app.route("/devops/run", methods=["POST"])
+@_require_auth
 def devops_run():
     """Run DevOps workflow from YAML definition."""
     data = request.get_json(silent=True) or {}
@@ -871,7 +2128,12 @@ def devops_run():
     for step in workflow.get("steps", []):
         cmd = step.get("run")
         if cmd:
-            rc, out = run_cmd(cmd, timeout=step.get("timeout", 600))
+            # Wrap string commands in a shell so pipes/redirects work
+            if IS_WINDOWS:
+                shell_cmd = ["cmd.exe", "/c", cmd]
+            else:
+                shell_cmd = ["bash", "-c", cmd]
+            rc, out = run_cmd(shell_cmd, timeout=step.get("timeout", 600))
             results.append({"step": step.get("name", cmd), "rc": rc, "output": out})
     return jsonify({"results": results})
 
@@ -888,10 +2150,19 @@ def backup_database(db_type, connection_string, output_file):
             raise Exception(f"pg_dump failed: {out}")
 
     elif db_type == "mysql":
-        cmd = f"mysqldump {connection_string} > {output_file}"
-        process = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        # Parse the connection string into argv elements (same pattern as redis above).
+        # Supports both DSN-style flags ("--host=db --user=root mydb") and a bare
+        # database name.  shlex.split preserves quoted values and avoids shell=True.
+        import shlex
+        conn_args = shlex.split(connection_string) if connection_string else []
+        with open(output_file, "wb") as out_fh:
+            process = subprocess.run(
+                ["mysqldump"] + conn_args,
+                stdout=out_fh,
+                stderr=subprocess.PIPE,
+            )
         if process.returncode != 0:
-             raise Exception(f"mysqldump failed: {process.stdout}")
+            raise Exception(f"mysqldump failed: {process.stderr.decode(errors='replace')}")
              
     elif db_type == "mongodb":
         cmd = ["mongodump", f"--uri={connection_string}", f"--archive={output_file}"]
@@ -901,10 +2172,11 @@ def backup_database(db_type, connection_string, output_file):
             
     elif db_type == "redis":
         # Redis RDB backup
-        # connection_string expected as 'redis-cli -h HOST -p PORT -a PASS' or just empty if local
-        # This is a simple implementation assuming local or provided cli args
-        cmd = f"redis-cli {connection_string} --rdb {output_file}"
-        rc, out = run_cmd(cmd.split())
+        # connection_string expected as extra cli args e.g. '-h HOST -p PORT -a PASS' or empty for local
+        import shlex
+        extra_args = shlex.split(connection_string) if connection_string else []
+        cmd = ["redis-cli"] + extra_args + ["--rdb", output_file]
+        rc, out = run_cmd(cmd)
         if rc != 0:
              raise Exception(f"redis backup failed: {out}")
 
@@ -952,8 +2224,12 @@ def backup_vm(vm_name, output_file):
 
 def backup_live(source_path, output_file):
     if IS_WINDOWS:
-        cmd = f"robocopy {source_path} {output_file} /MIR /R:0 /W:0"
-        subprocess.run(cmd, shell=True)
+        # Use list form to avoid shell=True injection on source/destination
+        cmd = ["robocopy", source_path, output_file, "/MIR", "/R:0", "/W:0"]
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        # robocopy exit codes 0-7 are success/informational; 8+ indicate errors
+        if proc.returncode >= 8:
+            raise Exception(f"robocopy failed (rc={proc.returncode}): {proc.stdout[:400]}")
     else:
         src = source_path if source_path.endswith('/') else source_path + '/'
         dst = output_file if output_file.endswith('/') else output_file + '/'
@@ -967,7 +2243,24 @@ def backup_live(source_path, output_file):
 def backup_full_system(output_file):
     """Create a full system image (Linux only, root required)."""
     if IS_WINDOWS:
-        raise NotImplementedError("Full system backup not supported on Windows agent yet")
+        target = _resolve_windows_backup_target()
+        if not target:
+            raise Exception("No writable backup target available for Windows full-system backup")
+        versions_before = set(_detect_wbadmin_versions(target))
+        rc, out = run_cmd(["wbadmin", "start", "backup", f"-backupTarget:{target}", "-allCritical", "-quiet"], timeout=7200)
+        if rc != 0:
+            raise Exception(f"wbadmin failed: {out[:400]}")
+        versions_after = _detect_wbadmin_versions(target)
+        version_identifier = next((v for v in versions_after if v not in versions_before), versions_after[0] if versions_after else "")
+        os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
+        _write_windows_backup_manifest(
+            output_file,
+            target,
+            version_identifier=version_identifier,
+            command_output=out,
+            backup_mode="full_system",
+        )
+        return output_file
     
     # DD backup of root partition (DANGEROUS - Mocking for safety)
     # cmd = f"dd if=/dev/sda of={output_file} bs=4M status=progress"
@@ -984,9 +2277,11 @@ def backup_full_system(output_file):
     return output_file
 
 @app.route('/backup/trigger', methods=['POST'])
+@_require_auth
 def trigger_backup():
     data = request.get_json(silent=True) or {}
     b_type = data.get("type")
+    log_id = data.get("log_id")
     
     # Input Sanitization
     allowed_types = ["database", "file", "vm", "live", "full_system"]
@@ -999,6 +2294,7 @@ def trigger_backup():
     
     # Async Execution Wrapper
     def run_backup_task(data, dest):
+        started_at = time.time()
         try:
             # Retention Policy
             retention_count = data.get("retention_count", 5)
@@ -1039,9 +2335,23 @@ def trigger_backup():
                     raise Exception(f"Encryption failed: {out}")
                     
             logger.info(f"Backup completed successfully: {dest}")
-            # Here we would ideally callback to the backend to update status
+            _report_backup_result(
+                log_id=log_id,
+                status="success",
+                output_file=dest,
+                duration_seconds=max(time.time() - started_at, 0.0),
+                file_size_bytes=_path_size_bytes(dest),
+            )
         except Exception as e:
             logger.error(f"Backup job failed: {e}")
+            _report_backup_result(
+                log_id=log_id,
+                status="failed",
+                output_file=dest,
+                duration_seconds=max(time.time() - started_at, 0.0),
+                file_size_bytes=_path_size_bytes(dest),
+                message=str(e),
+            )
 
     if not dest:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1051,12 +2361,91 @@ def trigger_backup():
         if b_type == "file": dest += ".zip"
         if b_type == "database": dest += ".dump"
         if b_type == "vm": dest += ".img"
-        if b_type == "full_system": dest += ".tar.gz"
+        if b_type == "full_system": dest += ".json" if IS_WINDOWS else ".tar.gz"
 
     # Start in background thread
     threading.Thread(target=run_backup_task, args=(data, dest), daemon=True).start()
     
     return jsonify({"status": "started", "output_file": dest, "message": "Backup job started in background"})
+
+
+@app.route('/backup/restore', methods=['POST'])
+@_require_auth
+def restore_backup():
+    """Restore a backup file to a target path.
+
+    Accepts JSON body:
+      - source_path: path to the backup file/directory on this host
+      - target_path: destination path to restore to (defaults to source_path from config)
+      - backup_type: 'file', 'database', 'live', etc. (optional, inferred from extension)
+    """
+    data = request.get_json(silent=True) or {}
+    source_path = data.get("source_path") or data.get("storage_path") or ""
+    target_path = data.get("target_path") or source_path
+
+    if not source_path:
+        return jsonify({"error": "source_path is required"}), 400
+
+    manifest, manifest_path = _resolve_windows_restore_manifest(source_path) if IS_WINDOWS else (None, None)
+
+    # Restore is a privileged backend-mediated operation. Accept only local,
+    # absolute filesystem paths and let archive extraction safety enforce that
+    # members stay under the chosen target root.
+    for label, path_value in (("source_path", source_path),):
+        if "://" in path_value:
+            return jsonify({"error": f"{label} must be a local filesystem path"}), 400
+        if not os.path.isabs(path_value):
+            return jsonify({"error": f"{label} must be an absolute path"}), 400
+
+    if not os.path.exists(source_path):
+        return jsonify({"error": f"source_path not found: {source_path}"}), 404
+
+    try:
+        if manifest:
+            backup_target_override = str(data.get("backup_target") or "").strip() or None
+            if backup_target_override and "://" in backup_target_override:
+                return jsonify({"error": "backup_target must be a local drive letter or UNC path"}), 400
+            result = _restore_windows_backup_manifest(manifest_path, target_override=backup_target_override)
+            if not result.get("success"):
+                return jsonify(result), 500
+            logger.info("Windows backup restore completed from %s", source_path)
+            return jsonify({
+                "status": "success",
+                "source": source_path,
+                "backup_target": result.get("backup_target"),
+                "version": result.get("version"),
+                "attempts": result.get("attempts", []),
+            })
+
+        if "://" in target_path:
+            return jsonify({"error": "target_path must be a local filesystem path"}), 400
+        if not os.path.isabs(target_path):
+            return jsonify({"error": "target_path must be an absolute path"}), 400
+
+        if os.path.isdir(source_path):
+            if os.path.exists(target_path):
+                if os.path.isdir(target_path):
+                    shutil.rmtree(target_path)
+                else:
+                    os.remove(target_path)
+            shutil.copytree(source_path, target_path)
+        elif source_path.endswith(".zip"):
+            os.makedirs(target_path, exist_ok=True)
+            with zipfile.ZipFile(source_path, 'r') as zf:
+                _safe_extract_zip(zf, target_path)
+        elif source_path.endswith((".tar.gz", ".tgz")):
+            os.makedirs(target_path, exist_ok=True)
+            with tarfile.open(source_path, "r:gz") as tf:
+                _safe_extract_tar(tf, target_path)
+        else:
+            os.makedirs(os.path.dirname(os.path.abspath(target_path)), exist_ok=True)
+            shutil.copy2(source_path, target_path)
+
+        logger.info(f"Restore completed: {source_path} -> {target_path}")
+        return jsonify({"status": "success", "source": source_path, "target": target_path})
+    except Exception as e:
+        logger.error(f"Restore failed: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 # === DEVOPS & POLICY ENGINE ===
@@ -1139,7 +2528,7 @@ def run_script_step(script, shell="bash"):
             cmd = ["powershell", "-ExecutionPolicy", "Bypass", "-File", script_path]
         else:
             cmd = [shell, script_path]
-            make_executable(script_path)
+            os.chmod(script_path, 0o755)
             
         rc, out = run_cmd(cmd)
         if rc != 0:
@@ -1150,6 +2539,7 @@ def run_script_step(script, shell="bash"):
             os.remove(script_path)
 
 @app.route('/policy/apply', methods=['POST'])
+@_require_auth
 def apply_policy():
     """Apply a YAML-based configuration policy."""
     data = request.get_json(silent=True) or {}
@@ -1221,10 +2611,77 @@ def apply_policy():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+# === LIVE COMMAND RUNNER ===
+
+_BLOCKED_CMDS = re.compile(
+    r'\b(rm\s+-rf\s+/|mkfs|dd\s+if=|:(){ :|:&};:|shutdown|halt|poweroff|init\s+0)\b',
+    re.IGNORECASE,
+)
+
+@app.route("/run", methods=["POST"])
+@_require_auth
+def run_command():
+    """Execute an ad-hoc shell command. Blocks destructive patterns.
+
+    Accepts optional 'working_dir' to set the cwd for the command.
+    'cd /some/path' commands are handled by updating the working_dir
+    in the response so the caller can track state client-side.
+    """
+    data = request.get_json(silent=True) or {}
+    cmd = (data.get("command") or "").strip()
+    timeout = int(data.get("timeout") or 30)
+    working_dir = (data.get("working_dir") or "").strip() or None
+
+    if not cmd:
+        return jsonify({"error": "command required"}), 400
+    if _BLOCKED_CMDS.search(cmd):
+        return jsonify({"error": "Command blocked: contains potentially destructive operation"}), 400
+    if timeout < 1 or timeout > 300:
+        timeout = 30
+
+    # Validate working_dir exists if provided
+    if working_dir and not os.path.isdir(working_dir):
+        return jsonify({"error": f"working_dir not found: {working_dir}"}), 400
+
+    # Handle bare 'cd <path>' — resolve the new dir and return it without running a subprocess
+    _cd_match = re.match(r'^cd\s+(.+)$', cmd)
+    if _cd_match:
+        raw_target = _cd_match.group(1).strip().strip('"\'')
+        if raw_target == '-':
+            new_dir = working_dir or os.getcwd()
+        elif os.path.isabs(raw_target):
+            new_dir = raw_target
+        else:
+            base = working_dir or os.getcwd()
+            new_dir = os.path.normpath(os.path.join(base, raw_target))
+        if not os.path.isdir(new_dir):
+            return jsonify({"rc": 1, "output": f"cd: {raw_target}: No such file or directory", "command": cmd, "working_dir": working_dir or ""})
+        return jsonify({"rc": 0, "output": "", "command": cmd, "working_dir": new_dir})
+
+    if IS_WINDOWS:
+        shell_cmd = ["cmd.exe", "/c", cmd]
+    else:
+        shell_cmd = ["bash", "-c", cmd]
+
+    rc, out = run_cmd(shell_cmd, timeout=timeout, cwd=working_dir)
+    return jsonify({"rc": rc, "output": out, "command": cmd, "working_dir": working_dir or ""})
+
+
 def main(port=8080, metrics_port=9100):
-    start_http_server(metrics_port)
-    logger.info("Agent starting on port %s", port)
-    app.run(host="0.0.0.0", port=port)
+    start_http_server(metrics_port, registry=REGISTRY)
+    logger.info("Agent metrics listening on port %s", metrics_port)
+    while True:
+        try:
+            logger.info("Agent API starting on port %s", port)
+            app.run(host="0.0.0.0", port=port)
+        except KeyboardInterrupt:
+            raise
+        except SystemExit as exc:
+            logger.error("Agent API exited (%s). Retrying in 5s.", exc)
+            time.sleep(5)
+        except Exception as exc:
+            logger.error("Agent API failed (%s). Retrying in 5s.", exc)
+            time.sleep(5)
 
 
 if __name__ == "__main__":
