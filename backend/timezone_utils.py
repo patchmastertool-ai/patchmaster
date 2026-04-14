@@ -187,6 +187,26 @@ def get_user_timezone() -> str:
     return "UTC"
 
 
+def get_current_timezone() -> str:
+    """Get current system timezone.
+
+    Returns:
+        Timezone name (defaults to UTC)
+    """
+    # First try user timezone, then server timezone
+    tz = get_user_timezone()
+    if tz != "UTC":
+        return tz
+
+    # Try server timezone
+    tz = get_server_timezone()
+    if tz != "UTC":
+        return tz
+
+    # Fall back to UTC
+    return "UTC"
+
+
 def get_server_timezone() -> str:
     """Get server timezone from environment.
 
