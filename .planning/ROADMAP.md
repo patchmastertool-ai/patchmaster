@@ -18,3 +18,46 @@
 
 **Plans:**
 - [x] 03-01-PLAN.md — Fix 5 UI/UX issues (chart rendering, bulk select, real-time, timezone, pagination)
+### Phase 4: Features and Integration Implementation
+
+**Goal:** Implement remaining Features (12) and Integrations (9), plus 3 backend issues
+
+**Depends on:** Phase 3
+
+**Issues:**
+
+Features (12):
+- FEAT-001: Rolling Restart
+- FEAT-002: Windows Snapshot
+- FEAT-003: Dependency Resolution
+- FEAT-004: Canary Testing
+- FEAT-005: RBAC
+- FEAT-006: Scheduling
+- FEAT-007: Drift Detection
+- FEAT-008: Compliance
+- FEAT-009: Audit Trail
+- FEAT-010: Multi-tenancy
+- FEAT-011: Plugin Framework
+- FEAT-012: Custom Reports
+
+Integration (9):
+- INT-001: GraphQL API
+- INT-002: Webhook Retry
+- INT-003: Prometheus Metrics
+- INT-004: Splunk
+- INT-005: Sumo Logic
+- INT-006: ServiceNow
+- INT-007: Jira
+- INT-008: Slack
+- INT-009: Custom integrations
+
+Backend (3):
+- BACK-001: Logging Performance
+- BACK-002: Timezone Handling
+- BACK-003: IPv6 Support
+
+**Plans:**
+- [x] 04-01-PLAN.md — Core APIs + Integrations (GraphQL, webhook retry, drift, multi-tenant, Prometheus, Splunk/Sumo/ServiceNow)
+- [x] 04-02-PLAN.md — Core Features (dependency resolution, RBAC, compliance, audit, plugins, reports, scheduling)
+- [x] 04-03-PLAN.md — Remaining Integrations (Jira, Slack, custom, timezone, rolling restart, Windows snapshots, canary)
+- [x] 04-04-PLAN.md — Gap Closure (wire 8 unwired artifacts to main.py)
