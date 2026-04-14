@@ -9,7 +9,7 @@ Provides integration modules for:
 - Custom: Framework for custom integrations
 """
 
-from integrations.jira import (
+from .jira import (
     JiraIntegration,
     JiraIssueType,
     JiraPriority,
@@ -17,19 +17,19 @@ from integrations.jira import (
     create_cve_alert_ticket,
     update_ticket_status,
 )
-from integrations.slack import (
+from .slack import (
     SlackIntegration,
     send_patch_job_notification,
     send_cve_alert,
 )
-from integrations.splunk import (
+from .splunk import (
     SplunkIntegration,
     send_patch_job_event,
     send_host_event,
     send_cve_event,
 )
-from integrations.sumo_logic import SumoLogicIntegration, send_log_message
-from integrations.servicenow import (
+from .sumo_logic import SumoLogicIntegration, send_log_message
+from .servicenow import (
     ServiceNowIntegration,
     ServiceNowPriority,
     ServiceNowUrgency,
@@ -37,7 +37,7 @@ from integrations.servicenow import (
     create_patch_failure_incident,
     create_cve_alert_incident,
 )
-from integrations.custom import (
+from .custom import (
     BaseIntegration,
     CustomIntegrationRegistry,
     IntegrationCategory,
