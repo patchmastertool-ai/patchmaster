@@ -35,15 +35,25 @@ def ensure_dir(primary: Path, fallback: Path) -> Path:
 
 
 STATE_DIR = ensure_dir(
-    Path(os.environ.get("PATCHMASTER_AGENT_STATE") or (
-        r"C:\ProgramData\PatchMaster-Agent" if IS_WINDOWS else "/var/lib/patch-agent"
-    )),
+    Path(
+        os.environ.get("PATCHMASTER_AGENT_STATE")
+        or (
+            r"C:\ProgramData\PatchMaster-Agent"
+            if IS_WINDOWS
+            else "/var/lib/patch-agent"
+        )
+    ),
     DEV_ROOT / "state",
 )
 LOG_DIR = ensure_dir(
-    Path(os.environ.get("PATCHMASTER_AGENT_LOG_DIR") or (
-        r"C:\ProgramData\PatchMaster-Agent\logs" if IS_WINDOWS else "/var/log/patch-agent"
-    )),
+    Path(
+        os.environ.get("PATCHMASTER_AGENT_LOG_DIR")
+        or (
+            r"C:\ProgramData\PatchMaster-Agent\logs"
+            if IS_WINDOWS
+            else "/var/log/patch-agent"
+        )
+    ),
     DEV_ROOT / "logs",
 )
 
@@ -51,11 +61,13 @@ logger = logging.getLogger("patchmaster-agent-heartbeat")
 logger.setLevel(logging.INFO)
 
 # Set up formatter
-fmt = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
 
 # Try to set up file logging, fall back to console-only if permission denied (e.g., during tests)
 try:
-    fh = RotatingFileHandler(LOG_DIR / "agent-heartbeat.log", maxBytes=1_000_000, backupCount=3)
+    fh = RotatingFileHandler(
+        LOG_DIR / "agent-heartbeat.log", maxBytes=1_000_000, backupCount=3
+    )
     fh.setFormatter(fmt)
     logger.addHandler(fh)
 except (PermissionError, OSError) as e:
@@ -99,7 +111,9 @@ def get_real_ip():
     # Linux specific: ip route / hostname -I
     if not IS_WINDOWS:
         try:
-            out = subprocess.check_output(["ip", "route", "get", "1.1.1.1"], text=True, timeout=5)
+            out = subprocess.check_output(
+                ["ip", "route", "get", "1.1.1.1"], text=True, timeout=5
+            )
             parts = out.split()
             for i, token in enumerate(parts):
                 if token == "src" and i + 1 < len(parts):
@@ -109,7 +123,9 @@ def get_real_ip():
         except Exception:
             logger.debug("ip route failed", exc_info=True)
         try:
-            out = subprocess.check_output(["hostname", "-I"], text=True, timeout=5).strip()
+            out = subprocess.check_output(
+                ["hostname", "-I"], text=True, timeout=5
+            ).strip()
             for candidate in out.split():
                 if candidate.count(".") == 3 and not candidate.startswith("127."):
                     return candidate
@@ -139,6 +155,16 @@ def get_os_info():
                     info[key] = val.strip('"')
         name = info.get("NAME", info.get("ID", "Linux"))
         version = info.get("VERSION_ID", info.get("VERSION", ""))
+
+        # Detect WSL (Windows Subsystem for Linux)
+        try:
+            with open("/proc/version") as f:
+                proc_version = f.read().lower()
+                if "wsl" in proc_version or "microsoft" in proc_version:
+                    name = f"WSL {name}"  # Prefix with WSL for identification
+        except Exception:
+            pass
+
         return name, version
     except Exception:
         return platform.system(), platform.version()
@@ -161,7 +187,11 @@ def _stable_agent_id() -> str:
 
 
 def _site_name() -> str:
-    return (os.environ.get("PATCHMASTER_SITE") or os.environ.get("PATCHMASTER_LOCATION") or "").strip()[:120]
+    return (
+        os.environ.get("PATCHMASTER_SITE")
+        or os.environ.get("PATCHMASTER_LOCATION")
+        or ""
+    ).strip()[:120]
 
 
 def _linux_firmware_inventory() -> dict:
@@ -184,7 +214,9 @@ def _linux_firmware_inventory() -> dict:
             logger.debug("Failed to read SecureBoot efivar", exc_info=True)
     if shutil.which("mokutil"):
         try:
-            out = subprocess.check_output(["mokutil", "--sb-state"], text=True, timeout=5)
+            out = subprocess.check_output(
+                ["mokutil", "--sb-state"], text=True, timeout=5
+            )
             lowered = out.lower()
             if "secureboot enabled" in lowered:
                 inventory["secure_boot_enabled"] = True
@@ -213,7 +245,14 @@ def _windows_firmware_inventory() -> dict:
     """
     try:
         out = subprocess.check_output(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                script,
+            ],
             text=True,
             timeout=10,
         ).strip()
@@ -222,7 +261,12 @@ def _windows_firmware_inventory() -> dict:
             boot_mode = str(data.get("boot_mode") or "Unknown").strip()
             secure_boot = data.get("secure_boot_enabled", None)
             if isinstance(secure_boot, str):
-                secure_boot = secure_boot.strip().lower() in {"true", "1", "yes", "enabled"}
+                secure_boot = secure_boot.strip().lower() in {
+                    "true",
+                    "1",
+                    "yes",
+                    "enabled",
+                }
             elif secure_boot is not None:
                 secure_boot = bool(secure_boot)
             return {
@@ -261,7 +305,11 @@ def _hardware_inventory() -> dict:
         except Exception:
             memory_mb = 0
         try:
-            disk_total_gb = round((psutil.disk_usage("C:\\" if IS_WINDOWS else "/").total or 0) / (1024 ** 3), 1)
+            disk_total_gb = round(
+                (psutil.disk_usage("C:\\" if IS_WINDOWS else "/").total or 0)
+                / (1024**3),
+                1,
+            )
         except Exception:
             disk_total_gb = 0
     return {
@@ -289,13 +337,31 @@ def get_inventory():
         "agent_version": AGENT_VERSION,
     }
 
+
 def register(controller_url, token=None):
     inv = get_inventory()
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
+
+    # Check agent version compatibility with backend before registration
     try:
-        r = requests.post(f"{controller_url}/api/register", json=inv, headers=headers, timeout=10)
+        r_version = requests.get(f"{controller_url}/api/version", timeout=5)
+        if r_version.status_code == 200:
+            backend_info = r_version.json()
+            backend_version = backend_info.get("version", "unknown")
+            agent_version = AGENT_VERSION
+            if backend_version != agent_version:
+                logger.warning(
+                    f"Version mismatch: agent={agent_version}, backend expects={backend_version}. Registration may still proceed."
+                )
+    except Exception as e:
+        logger.warning(f"Could not verify backend version: {e}")
+
+    try:
+        r = requests.post(
+            f"{controller_url}/api/register", json=inv, headers=headers, timeout=10
+        )
         if r.status_code == 200:
             logger.info("Registered successfully.")
             return r.json().get("agent_token")
@@ -305,16 +371,27 @@ def register(controller_url, token=None):
         logger.error(f"Registration error: {e}")
     return None
 
+
 def heartbeat(controller_url, agent_token):
     inv = get_inventory()
-    inv["agent_token"] = agent_token  # included in body for server-side token validation
-    headers = {"Authorization": f"Bearer {agent_token}", "Content-Type": "application/json"}
+    inv["agent_token"] = (
+        agent_token  # included in body for server-side token validation
+    )
+    headers = {
+        "Authorization": f"Bearer {agent_token}",
+        "Content-Type": "application/json",
+    }
     try:
-        r = requests.post(f"{controller_url}/api/heartbeat", json=inv, headers=headers, timeout=10)
+        r = requests.post(
+            f"{controller_url}/api/heartbeat", json=inv, headers=headers, timeout=10
+        )
         if r.status_code == 200:
             logger.info("Heartbeat sent.")
         elif r.status_code in (401, 404):
-            logger.warning("Heartbeat rejected (%s) — host not found or token stale, will re-register on next cycle.", r.status_code)
+            logger.warning(
+                "Heartbeat rejected (%s) — host not found or token stale, will re-register on next cycle.",
+                r.status_code,
+            )
             return False  # signal caller to re-register
         else:
             logger.error(f"Heartbeat failed: {r.status_code} {r.text}")
@@ -328,9 +405,9 @@ def _normalize_controller_url(value: str) -> str:
     if not raw:
         return raw
     if raw.startswith("http:") and not raw.startswith("http://"):
-        raw = "http://" + raw[len("http:"):].lstrip("/")
+        raw = "http://" + raw[len("http:") :].lstrip("/")
     if raw.startswith("https:") and not raw.startswith("https://"):
-        raw = "https://" + raw[len("https:"):].lstrip("/")
+        raw = "https://" + raw[len("https:") :].lstrip("/")
     raw = raw.rstrip("/")
     try:
         parsed = urlsplit(raw)
@@ -348,6 +425,36 @@ def _normalize_controller_url(value: str) -> str:
         port = 443
     netloc = f"{host}:{port}" if port not in (80, 443) else host
     return urlunsplit((parsed.scheme, netloc, "", "", ""))
+
+
+def check_local_api():
+    """Watchdog: verify the local agent API is running."""
+    port = int(os.environ.get("AGENT_PORT", "8080"))
+    try:
+        r = requests.get(f"http://127.0.0.1:{port}/snapshot/status", timeout=5)
+        if r.status_code == 200:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def restart_agent_service():
+    """Attempt to restart the agent service if the API is dead."""
+    logger.error("Watchdog: Local API is unresponsive. Attempting service restart.")
+    if IS_WINDOWS:
+        try:
+            subprocess.run(
+                ["powershell", "-c", "Restart-Service PatchMasterAgent"], check=False
+            )
+        except Exception as e:
+            logger.error(f"Restart-Service failed: {e}")
+    else:
+        try:
+            subprocess.run(["systemctl", "restart", "patch-agent"], check=False)
+        except Exception as e:
+            logger.error(f"systemctl restart failed: {e}")
+
 
 def main():
     controller_url = os.environ.get("CONTROLLER_URL", "http://localhost:8000")
@@ -368,9 +475,27 @@ def main():
                 STATE_DIR.mkdir(parents=True, exist_ok=True)
                 _write_private_text(token_path, agent_token)
             except PermissionError:
-                logger.warning(f"Cannot write token to {token_path} (permission denied). Running without persistent token.")
+                logger.warning(
+                    f"Cannot write token to {token_path} (permission denied). Running without persistent token."
+                )
+
+    failed_api_checks = 0
+
     while True:
         try:
+            # Watchdog check
+            if check_local_api():
+                failed_api_checks = 0
+            else:
+                failed_api_checks += 1
+                logger.warning(
+                    f"Watchdog: API health check failed ({failed_api_checks}/3)"
+                )
+                if failed_api_checks >= 3:
+                    restart_agent_service()
+                    failed_api_checks = 0
+
+            # Heartbeat check
             if agent_token:
                 ok = heartbeat(controller_url, agent_token)
                 if ok is False:
@@ -390,6 +515,7 @@ def main():
         except Exception as e:
             logger.error(f"Loop error: {e}")
         time.sleep(60)
+
 
 if __name__ == "__main__":
     main()
