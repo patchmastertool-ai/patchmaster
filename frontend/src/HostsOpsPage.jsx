@@ -51,6 +51,22 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
   // Persist filters to localStorage (UI-009)
   const [persistedFilters, setPersistedFilters] = useFilterPersistence('hosts');
   
+  // Persist pagination state to localStorage (UI-010)
+  const [page, setPage] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pm_hosts_page');
+      return saved ? parseInt(saved, 10) : 1;
+    } catch { return 1; }
+  });
+  const PER_PAGE = 50;
+  
+  // Save page to localStorage on change
+  useEffect(() => {
+    try {
+      localStorage.setItem('pm_hosts_page', String(page));
+    } catch {}
+  }, [page]);
+  
   const [search, setSearch] = useState(persistedFilters.search || '');
   // Debounce search input by 300ms to avoid re-filtering on every keystroke
   const debouncedSearch = useDebounce(search, 300);
@@ -68,8 +84,16 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
   const [tooltipTarget, setTooltipTarget] = useState(null);
 
   const refreshHosts = useCallback(() => {
-    apiFetch(`${API}/api/hosts/`).then(r => r.json()).then(setHosts).catch(() => {});
-  }, [API, apiFetch, setHosts]);
+    // Fetch with pagination (UI-010)
+    apiFetch(`${API}/api/hosts/?page=${page}&per_page=${PER_PAGE}`).then(r => r.json()).then(data => {
+      // Handle paginated response format
+      if (data && data.hosts) {
+        setHosts(data.hosts);
+      } else if (Array.isArray(data)) {
+        setHosts(data);
+      }
+    }).catch(() => {});
+  }, [API, apiFetch, setHosts, page]);
 
   const checkAgent = useCallback(async (ip) => {
     if (!ip) return;
@@ -660,6 +684,15 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
                 })}
               </tbody>
             </table>
+          </div>
+          
+          {/* Pagination controls (UI-010) */}
+          <div className="ops-table-toolbar" style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
+            <div className="ops-actions">
+              <button className="btn btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>Previous</button>
+              <span style={{ padding: '0 12px', fontWeight: 500 }}>Page {page}</span>
+              <button className="btn btn-sm" onClick={() => setPage(p => p + 1)} disabled={filtered.length < PER_PAGE}>Next</button>
+            </div>
           </div>
         )}
       </div>

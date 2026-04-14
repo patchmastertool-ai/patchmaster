@@ -302,8 +302,29 @@ function App() {
   const [licenseInfo, setLicenseInfo] = useState(() => getLicenseCache());
   const [licenseLoaded, setLicenseLoaded] = useState(false); // true after first fetch
   const [showLicensePopup, setShowLicensePopup] = useState(false);
+  const [showExpiringWarning, setShowExpiringWarning] = useState(true); // Controls expiring soon banner
   const [opsQueueFocusJobId, setOpsQueueFocusJobId] = useState('');
   const [opsQueueFocusSeq, setOpsQueueFocusSeq] = useState(0);
+  
+  // Dark mode state - initialize from localStorage
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('pm_dark_mode');
+    return saved === 'true';
+  });
+
+  // Apply dark mode to document root
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    localStorage.setItem('pm_dark_mode', darkMode);
+  }, [darkMode]);
+
+  const toggleDarkMode = () => {
+    setDarkMode(prev => !prev);
+  };
 
   const handleLogin = (t, u) => {
     setToken(t); setUser(u); setTokenState(t); setUserState(u);
@@ -340,7 +361,14 @@ function App() {
         setPage('license');
         return;
       }
-      apiFetch(`${API}/api/hosts/`).then(r => r.json()).then(d => { if (Array.isArray(d)) setHosts(d); }).catch(() => {});
+      apiFetch(`${API}/api/hosts/`).then(r => r.json()).then(d => { 
+        // Handle both array format and paginated format {items: [...]}
+        if (Array.isArray(d)) {
+          setHosts(d);
+        } else if (Array.isArray(d?.items)) {
+          setHosts(d.items);
+        }
+      }).catch(() => {});
       apiFetch(`${API}/api/jobs/`).then(r => r.json()).then(d => { if (Array.isArray(d)) setJobs(d); }).catch(() => {});
     }).catch(() => {
       setLicenseLoaded(true);
@@ -378,6 +406,13 @@ function App() {
       setShowLicensePopup(false);
     }
   }, [licenseInfo, licenseLoaded]);
+
+  // Show expiring warning when license has 30 days or less remaining
+  useEffect(() => {
+    if (licenseInfo && licenseInfo.valid && !licenseInfo.expired && licenseInfo.days_remaining <= 30) {
+      setShowExpiringWarning(true);
+    }
+  }, [licenseInfo]);
 
   if (!token) return <LoginPage onLogin={handleLogin} />;
 
@@ -473,10 +508,19 @@ function App() {
       <main className="main-content">
         {/* License expired/not-activated popup modal */}
         {showLicensePopup && <LicensePopup licenseInfo={licenseInfo} onSuccess={() => { setShowLicensePopup(false); fetchAll(); }} />}
-        {/* Expiring soon warning banner */}
-        {licenseInfo && licenseInfo.valid && !licenseInfo.expired && licenseInfo.days_remaining <= 30 && (
-          <div style={{background:'#ffc107',color:'#000',padding:'8px 20px',textAlign:'center',fontWeight:600,cursor:'pointer'}} onClick={()=>setPage('license')}>
-            License expires in {licenseInfo.days_remaining} day{licenseInfo.days_remaining!==1?'s':''} ({licenseInfo.expires_at}). Click here to manage.
+        {/* Expiring soon warning banner - manually dismissible */}
+        {showExpiringWarning && licenseInfo && licenseInfo.valid && !licenseInfo.expired && licenseInfo.days_remaining <= 30 && (
+          <div style={{background:'#ffc107',color:'#000',padding:'8px 20px',textAlign:'center',fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',gap:20,position:'relative'}}>
+            <span style={{cursor:'pointer',flex:1}} onClick={()=>setPage('license')}>
+              License expires in {licenseInfo.days_remaining} day{licenseInfo.days_remaining!==1?'s':''} ({licenseInfo.expires_at}). Click here to manage.
+            </span>
+            <button 
+              onClick={(e)=>{e.stopPropagation(); setShowExpiringWarning(false);}} 
+              style={{background:'transparent',border:'none',color:'#000',fontSize:20,fontWeight:'bold',cursor:'pointer',padding:'0 8px',lineHeight:1}}
+              title="Dismiss warning"
+            >
+              ×
+            </button>
           </div>
         )}
         <header className="top-bar">
@@ -485,6 +529,14 @@ function App() {
             <GlobalSearch setPage={setPage} />
           </div>
           <div className="top-bar-actions" style={{display:'flex',alignItems:'center',gap:10,justifyContent:'flex-end'}}>
+            <button 
+              className="btn btn-sm" 
+              onClick={toggleDarkMode} 
+              title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              style={{padding:'8px 12px'}}
+            >
+              {darkMode ? '☀️' : '🌙'}
+            </button>
             <NotificationCenter setPage={setPage} toast={toast} />
             <button className="btn btn-sm" onClick={fetchAll} title="Refresh data">Refresh</button>
           </div>
@@ -754,97 +806,89 @@ function LoginPage({ onLogin }) {
   };
 
   return (
-    <div className="login-container" style={{background:'#060e20', height:'100vh', display:'flex', alignItems:'center', justifyContent:'center'}}>
-      <div className="login-card" style={{background:'#05183c', padding:'3rem', borderRadius:16, width:420, border:'1px solid rgba(43,70,128,0.3)', boxShadow:'0 20px 25px -5px rgba(0,0,0,0.5)', position: 'relative', overflow: 'hidden'}}>
-        <div className="glass-gradient" style={{position:'absolute', inset:0, pointerEvents:'none', opacity:0.6}}></div>
-        <div style={{position:'relative', zIndex:1}}>
-          <div style={{display:'flex', justifyContent:'center', marginBottom:16}}>
-            <span className="material-symbols-outlined" style={{color:'#7bd0ff', fontSize:48, fontVariationSettings: "'FILL' 1"}}>security</span>
+    <div className="login-container" style={{background:'#0f172a', height:'100vh', display:'flex', alignItems:'center', justifyContent:'center'}}>
+      <div className="login-card" style={{background:'#1e293b', padding:'2.5rem', borderRadius:16, width:400, border:'1px solid #334155', boxShadow:'0 20px 25px -5px rgba(0,0,0,0.3)'}}>
+        <h2 style={{color:'#fff', textAlign:'center', marginBottom:8}}>PatchMaster</h2>
+        <p style={{textAlign:'center', color:'#94a3b8', fontSize:14, marginBottom:24}}>
+          {isSetup ? 'Welcome! Create the primary Administrator account.' : 'Sign in to your account'}
+        </p>
+
+        <form onSubmit={submit}>
+          <div style={{marginBottom:16}}>
+            <label style={{display:'block', color:'#94a3b8', fontSize:12, marginBottom:6}}>Username</label>
+            <input className="input" style={{width:'100%', background:'#0f172a', border:'1px solid #334155', color:'#fff', padding:10, borderRadius:8}}
+              placeholder="e.g. admin" value={username} onChange={e=>setUsername(e.target.value)} required />
           </div>
-          <h2 style={{color:'#dee5ff', textAlign:'center', marginBottom:8, fontSize:28, fontWeight:800, letterSpacing:'-0.02em'}}>PatchMaster</h2>
-          <p style={{textAlign:'center', color:'#91aaeb', fontSize:13, marginBottom:32, textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:700}}>
-            {isSetup ? 'System Administrator Setup' : 'Enterprise Authentication'}
-          </p>
 
-          <form onSubmit={submit}>
-            <div style={{marginBottom:16}}>
-              <label style={{display:'block', color:'#91aaeb', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:8}}>Username</label>
-              <input className="input" style={{width:'100%'}}
-                placeholder="e.g. admin" value={username} onChange={e=>setUsername(e.target.value)} required />
-            </div>
-
-            {isSetup && (
-               <>
-                <div style={{marginBottom:16}}>
-                  <label style={{display:'block', color:'#91aaeb', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:8}}>Email Address</label>
-                  <input className="input" type="email" style={{width:'100%'}}
-                    placeholder="admin@company.com" value={email} onChange={e=>setEmail(e.target.value)} required />
-                </div>
-                <div style={{marginBottom:16}}>
-                  <label style={{display:'block', color:'#91aaeb', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:8}}>Full Name (Optional)</label>
-                  <input className="input" style={{width:'100%'}}
-                    placeholder="Administrator" value={fullName} onChange={e=>setFullName(e.target.value)} />
-                </div>
-              </>
-            )}
-
-            <div style={{marginBottom:32}}>
-              <label style={{display:'block', color:'#91aaeb', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:8}}>Password</label>
-              <input className="input" type="password" style={{width:'100%'}}
-                placeholder="********" value={password} onChange={e=>setPassword(e.target.value)} required />
-              {isSetup && <small style={{color:'#4d556b', fontSize:10, marginTop:6, display:'block'}}>12-128 chars, mix of upper, lower, numbers & symbols</small>}
-            </div>
-
-            {error && <div style={{background:'#7f2927', color:'#ff9993', padding:12, borderRadius:8, fontSize:13, marginBottom:24, border:'1px solid rgba(238,125,119,0.3)', fontWeight:600}}>{error}</div>}
-
-            <button className="btn btn-primary btn-lg" style={{width:'100%', padding:12, fontWeight:800, fontSize:14}} disabled={loading}>
-              {loading ? 'Authenticating...' : isSetup ? 'Initialize System' : 'Sign In'}
-            </button>
-          </form>
-
-          {!isSetup && (
-            <div style={{marginTop:24}}>
-              <div style={{display:'flex', alignItems:'center', gap:12, margin:'20px 0'}}>
-                <div style={{flex:1, height:1, background:'rgba(43,70,128,0.3)'}} />
-                <span style={{color:'#4d556b', fontSize:10, fontWeight:700, letterSpacing:1, textTransform:'uppercase'}}>OR</span>
-                <div style={{flex:1, height:1, background:'rgba(43,70,128,0.3)'}} />
+          {isSetup && (
+             <>
+              <div style={{marginBottom:16}}>
+                <label style={{display:'block', color:'#94a3b8', fontSize:12, marginBottom:6}}>Email Address</label>
+                <input className="input" type="email" style={{width:'100%', background:'#0f172a', border:'1px solid #334155', color:'#fff', padding:10, borderRadius:8}}
+                  placeholder="admin@company.com" value={email} onChange={e=>setEmail(e.target.value)} required />
               </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <button 
-                  type="button" 
-                  onClick={() => window.location.href = `${API}/api/auth/oidc/login`}
-                  style={{ width: '100%', padding: 12, background: 'rgba(123,208,255,0.1)', border: '1px solid rgba(123,208,255,0.3)', color: '#7bd0ff', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13, transition:'background 0.2s', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-                  <span className="material-symbols-outlined" style={{fontSize:18}}>badge</span> SSO Login
-                </button>
-                <div className="btn-secondary" style={{borderRadius:8}}>
-                  <LdapLoginButton onLogin={onLogin} />
-                </div>
+              <div style={{marginBottom:16}}>
+                <label style={{display:'block', color:'#94a3b8', fontSize:12, marginBottom:6}}>Full Name (Optional)</label>
+                <input className="input" style={{width:'100%', background:'#0f172a', border:'1px solid #334155', color:'#fff', padding:10, borderRadius:8}}
+                  placeholder="Administrator" value={fullName} onChange={e=>setFullName(e.target.value)} />
               </div>
-
-              <div style={{marginTop:24, color:'#91aaeb', fontSize:13}}>
-                <button type="button" className="btn btn-sm" style={{width:'100%', background:'transparent', border:'1px solid rgba(43,70,128,0.3)', color:'#91aaeb'}} onClick={()=>setResetMode(!resetMode)}>
-                  {resetMode ? 'Cancel Reset' : 'Forgot Password'}
-                </button>
-                {resetMode && (
-                  <div style={{marginTop:16, padding:16, border:'1px solid rgba(43,70,128,0.5)', borderRadius:12, background:'#031d4b'}}>
-                    <label style={{display:'block', color:'#91aaeb', fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:6}}>Username / Email</label>
-                    <input className="input" style={{width:'100%', marginBottom:12}} value={fpUser} onChange={e=>setFpUser(e.target.value)} />
-                    <label style={{display:'block', color:'#91aaeb', fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:6}}>Reset Token</label>
-                    <input className="input" style={{width:'100%', marginBottom:12}} value={fpToken} onChange={e=>setFpToken(e.target.value)} placeholder="Wait for token..." />
-                    <label style={{display:'block', color:'#91aaeb', fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:6}}>New Password</label>
-                    <input className="input" type="password" style={{width:'100%', marginBottom:16}} value={fpNewPwd} onChange={e=>setFpNewPwd(e.target.value)} />
-                    {fpMsg && <div style={{background:'#004c69', color:'#7bd0ff', padding:10, borderRadius:8, fontSize:12, marginBottom:16, fontWeight:600}}>{fpMsg}</div>}
-                    <div className="btn-group" style={{display:'flex', gap:8}}>
-                      <button type="button" className="btn btn-sm btn-info" style={{flex:1}} disabled={fpBusy} onClick={requestReset}>Get Token</button>
-                      <button type="button" className="btn btn-sm btn-success" style={{flex:1}} disabled={fpBusy} onClick={performReset}>Confirm Reset</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            </>
           )}
-        </div>
+
+          <div style={{marginBottom:24}}>
+            <label style={{display:'block', color:'#94a3b8', fontSize:12, marginBottom:6}}>Password</label>
+            <input className="input" type="password" style={{width:'100%', background:'#0f172a', border:'1px solid #334155', color:'#fff', padding:10, borderRadius:8}}
+              placeholder="********" value={password} onChange={e=>setPassword(e.target.value)} required />
+            {isSetup && <small style={{color:'#64748b', fontSize:11, marginTop:4, display:'block'}}>12-128 chars, mix of upper, lower, numbers & symbols</small>}
+          </div>
+
+          {error && <div style={{background:'#7f1d1d', color:'#fca5a5', padding:10, borderRadius:8, fontSize:13, marginBottom:16, border:'1px solid #dc2626'}}>{error}</div>}
+
+          <button className="btn btn-primary btn-lg" style={{width:'100%', padding:12, fontWeight:600}} disabled={loading}>
+            {loading ? 'Processing...' : isSetup ? 'Initialize System' : 'Sign In'}
+          </button>
+        </form>
+
+        {!isSetup && (
+          <div style={{marginTop:20}}>
+            <div style={{display:'flex', alignItems:'center', gap:8, margin:'12px 0'}}>
+              <div style={{flex:1, height:1, background:'#334155'}} />
+              <span style={{color:'#475569', fontSize:12}}>OR</span>
+              <div style={{flex:1, height:1, background:'#334155'}} />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button 
+                type="button" 
+                onClick={() => window.location.href = `${API}/api/auth/oidc/login`}
+                style={{ width: '100%', padding: 11, background: '#0ea5e9', border: '1px solid #0284c7', color: '#0f172a', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
+                Enterprise SSO Login
+              </button>
+              <LdapLoginButton onLogin={onLogin} />
+            </div>
+
+            <div style={{marginTop:16, color:'#cbd5e1', fontSize:13}}>
+              <button type="button" className="btn btn-sm" style={{width:'100%', background:'#0f172a', border:'1px solid #334155', color:'#cbd5e1'}} onClick={()=>setResetMode(!resetMode)}>
+                {resetMode ? 'Cancel password reset' : 'Forgot password?'}
+              </button>
+              {resetMode && (
+                <div style={{marginTop:12, padding:12, border:'1px solid #334155', borderRadius:8, background:'#0f172a'}}>
+                  <label style={{display:'block', color:'#94a3b8', fontSize:12, marginBottom:6}}>Username or Email</label>
+                  <input className="input" style={{width:'100%', background:'#111827', border:'1px solid #334155', color:'#fff', padding:10, borderRadius:8, marginBottom:8}} value={fpUser} onChange={e=>setFpUser(e.target.value)} />
+                  <label style={{display:'block', color:'#94a3b8', fontSize:12, marginBottom:6}}>Reset Token</label>
+                  <input className="input" style={{width:'100%', background:'#111827', border:'1px solid #334155', color:'#fff', padding:10, borderRadius:8, marginBottom:8}} value={fpToken} onChange={e=>setFpToken(e.target.value)} placeholder="Click 'Send reset token' to generate" />
+                  <label style={{display:'block', color:'#94a3b8', fontSize:12, marginBottom:6}}>New Password</label>
+                  <input className="input" type="password" style={{width:'100%', background:'#111827', border:'1px solid #334155', color:'#fff', padding:10, borderRadius:8, marginBottom:12}} value={fpNewPwd} onChange={e=>setFpNewPwd(e.target.value)} />
+                  {fpMsg && <div style={{background:'#0ea5e9', color:'#0b1224', padding:8, borderRadius:6, fontSize:12, marginBottom:10}}>{fpMsg}</div>}
+                  <div className="btn-group" style={{display:'flex', gap:8}}>
+                    <button type="button" className="btn btn-sm btn-primary" style={{flex:1}} disabled={fpBusy} onClick={requestReset}>Send reset token</button>
+                    <button type="button" className="btn btn-sm btn-success" style={{flex:1}} disabled={fpBusy} onClick={performReset}>Reset password</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -957,12 +1001,39 @@ function RiskGauge({ score }) {
   );
 }
 
-function PatchVelocityChart({ data }) {
+const MAX_DATA_POINTS = 30;
+
+// Timezone utility for consistent date display
+const USER_TIMEZONE = typeof Intl !== 'undefined' 
+  ? Intl.DateTimeFormat().resolvedOptions().timeZone 
+  : 'UTC';
+
+const formatDateTime = (isoString) => {
+  if (!isoString) return 'N/A';
+  try {
+    return new Date(isoString).toLocaleString(undefined, {
+      timeZone: USER_TIMEZONE,
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  } catch { return 'Invalid'; }
+};
+
+// Memoized chart component with data windowing
+const PatchVelocityChart = React.memo(function PatchVelocityChart({ data }) {
   if (!data || data.length === 0) return null;
-  const max = Math.max(...data.map(d => d.jobs), 1);
+  
+  // Window data to max 30 points for performance
+  const displayData = data.length > MAX_DATA_POINTS 
+    ? data.slice(-MAX_DATA_POINTS) 
+    : data;
+  
+  // Memoize max calculation
+  const max = useMemo(() => Math.max(...displayData.map(d => d.jobs), 1), [displayData]);
+  
   return (
     <div style={{display:'flex',alignItems:'flex-end',gap:6,height:80,marginTop:8}}>
-      {data.map((d, i) => (
+      {displayData.map((d, i) => (
         <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
           <div style={{
             width:'100%', background:'#4361ee', borderRadius:'4px 4px 0 0',
@@ -974,7 +1045,7 @@ function PatchVelocityChart({ data }) {
       ))}
     </div>
   );
-}
+});
 
 function AnalyticsDashboardPage() {
   return (

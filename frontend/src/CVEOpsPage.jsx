@@ -51,6 +51,21 @@ export default function CVEOpsPage({ API, apiFetch, hasRole, getToken, AppIcon }
   // Persist filters to localStorage (UI-009)
   const [persistedFilters, setPersistedFilters] = useFilterPersistence('cve');
   
+  // Persist pagination state to localStorage (UI-010)
+  const [page, setPage] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pm_cve_page');
+      return saved ? parseInt(saved, 10) : 1;
+    } catch { return 1; }
+  });
+  
+  // Save page to localStorage on change
+  useEffect(() => {
+    try {
+      localStorage.setItem('pm_cve_page', String(page));
+    } catch {}
+  }, [page]);
+  
   const [search, setSearch] = useState(persistedFilters.search || '');
   // Debounce search input by 300ms to avoid excessive API calls
   const debouncedSearch = useDebounce(search, 300);
@@ -65,7 +80,6 @@ export default function CVEOpsPage({ API, apiFetch, hasRole, getToken, AppIcon }
   const [selectedCve, setSelectedCve] = useState(null);
   const [cveDetail, setCveDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [page, setPage] = useState(1);
   const [perPage] = useState(50);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
