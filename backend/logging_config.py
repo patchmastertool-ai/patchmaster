@@ -251,7 +251,10 @@ def configure_logger_levels():
         logger.setLevel(level)
 
 
-# Default configuration - apply on import
+# Default configuration - lazy initialization to avoid module-level side effects
 # Can be overridden by calling setup_logging() explicitly
-DEFAULT_CONFIG = setup_logging()
-configure_logger_levels()
+def get_default_config():
+    if not hasattr(get_default_config, "_config"):
+        get_default_config._config = setup_logging()
+        configure_logger_levels()
+    return get_default_config._config
