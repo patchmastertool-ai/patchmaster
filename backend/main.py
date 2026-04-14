@@ -85,6 +85,7 @@ from license import get_license_info, get_licensed_features
 from api.graphql import create_graphql_router
 from multi_tenant import MultiTenantMiddleware
 import monitoring_manager
+from drift_detector import router as drift_router
 from prometheus_targets import sync_prometheus_agent_targets
 import version_checker
 import asyncio
@@ -632,6 +633,9 @@ app.include_router(software_kiosk_router)
 app.include_router(provisioning_router)
 app.include_router(network_boot_router)
 app.include_router(network_boot_public_router)
+
+# Drift detection
+app.include_router(drift_router)
 
 # GraphQL API (strawberry-graphql)
 graphql_router = create_graphql_router()

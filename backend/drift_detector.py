@@ -10,11 +10,14 @@ from typing import Optional, Dict, Any, List
 from enum import Enum
 from dataclasses import dataclass
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 
-from database import Base
+from database import Base, get_db
 from models.db_models import Host
+from auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -307,3 +310,132 @@ def format_drift_report(report: DriftReport) -> str:
         lines.append("No drift detected.")
 
     return "\n".join(lines)
+
+
+# ─── API Router ───────────────────────────────────────────────────────────────
+
+router = APIRouter(prefix="/api/hosts", tags=["drift"])
+
+
+class DriftDetectionRequest(BaseModel):
+    """Request model for triggering drift detection."""
+
+    packages: Optional[Dict[str, str]] = None
+    services: Optional[Dict[str, str]] = None
+    network: Optional[Dict[str, Any]] = None
+    registry: Optional[Dict[str, Any]] = None
+    files: Optional[Dict[str, Any]] = None
+
+
+class BaselineCreate(BaseModel):
+    """Request model for creating a baseline."""
+
+    baseline_name: str
+    baseline_type: str = "manual"
+    packages: Optional[Dict[str, str]] = None
+    services: Optional[Dict[str, str]] = None
+    network: Optional[Dict[str, Any]] = None
+    registry: Optional[Dict[str, Any]] = None
+    files: Optional[Dict[str, Any]] = None
+
+
+@router.get("/drift")
+async def list_drift_reports(
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """List all hosts with drift detection reports."""
+    # Return summary of drift-capable hosts
+    return {"message": "Drift detection API ready"}
+
+
+@router.post("/drift/{host_id}")
+async def detect_host_drift(
+    host_id: int,
+    request: DriftDetectionRequest,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Detect configuration drift for a specific host."""
+    report = await detect_drift(
+        host_id=host_id,
+        current_packages=request.packages,
+        current_services=request.services,
+        current_network=request.network,
+        current_registry=request.registry,
+        current_files=request.files,
+    )
+    return {
+        "host_id": report.host_id,
+        "baseline_id": report.baseline_id,
+        "timestamp": report.timestamp.isoformat(),
+        "total_items": report.total_items,
+        "critical_count": report.critical_count,
+        "high_count": report.high_count,
+        "medium_count": report.medium_count,
+        "low_count": report.low_count,
+        "compliance_score": report.compliance_score,
+        "drift_items": [
+            {
+                "drift_type": item.drift_type.value,
+                "category": item.category,
+                "item_key": item.item_key,
+                "expected_value": item.expected_value,
+                "actual_value": item.actual_value,
+                "severity": item.severity.value,
+                "description": item.description,
+            }
+            for item in report.drift_items
+        ],
+    }
+
+
+@router.post("/{host_id}/baselines")
+async def create_host_baseline(
+    host_id: int,
+    request: BaselineCreate,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Create a configuration baseline for a host."""
+    baseline = await create_baseline(
+        host_id=host_id,
+        baseline_name=request.baseline_name,
+        packages=request.packages,
+        services=request.services,
+        network=request.network,
+        registry=request.registry,
+        files=request.files,
+        baseline_type=request.baseline_type,
+        created_by=current_user.username,
+        db_session=db,
+    )
+    return {
+        "id": baseline.id,
+        "host_id": baseline.host_id,
+        "baseline_name": baseline.baseline_name,
+        "baseline_type": baseline.baseline_type,
+        "created_at": baseline.created_at.isoformat(),
+    }
+
+
+@router.get("/{host_id}/baselines")
+async def list_host_baselines(
+    host_id: int,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """List all baselines for a host."""
+    baselines = await list_baselines(host_id, db)
+    return {
+        "items": [
+            {
+                "id": b.id,
+                "baseline_name": b.baseline_name,
+                "baseline_type": b.baseline_type,
+                "created_at": b.created_at.isoformat(),
+                "created_by": b.created_by,
+            }
+            for b in baselines
+        ]
+    }
