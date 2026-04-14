@@ -41,12 +41,13 @@ const AlertsCenterPageView = React.lazy(() => import('./AlertsCenterPage'));
 const AuditPageView = React.lazy(() => import('./AuditPage'));
 const NotificationsPageView = React.lazy(() => import('./NotificationsPage'));
 
-/* Global Search */
+/* Global Search with keyboard navigation */
 function GlobalSearch({ setPage }) {
   const [query, setQuery] = React.useState('');
   const [results, setResults] = React.useState(null);
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
+  const [selectedIndex, setSelectedIndex] = React.useState(-1);
   const ref = React.useRef(null);
   const shortcutLabel = 'Ctrl+K';
 
@@ -55,9 +56,10 @@ function GlobalSearch({ setPage }) {
     const t = setTimeout(async () => {
       setLoading(true);
       try {
-        const r = await apiFetch(`${API}/api/search/?q=${encodeURIComponent(query)}`);
+        const r = await apiFetch(`${API}/api/search/?q=${encodeURIComponent(query)}&limit=10`);
         const d = await r.json();
         setResults(d.results);
+        setSelectedIndex(-1);
       } catch {
         setResults({ hosts: [], cves: [], jobs: [] });
       } finally {
@@ -80,10 +82,29 @@ function GlobalSearch({ setPage }) {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
+  // Keyboard navigation for search results
+  const handleKeyDown = (e) => {
+    if (!open || !results) return;
+    const allItems = [...(results.hosts || []), ...(results.cves || [])];
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => Math.min(prev + 1, allItems.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+      setSelectedIndex(-1);
+    } else if (e.key === 'Enter' && selectedIndex >= 0) {
+      const item = allItems[selectedIndex];
+      if (item) navigate(item.type);
+    }
+  };
+
   const navigate = (type) => { setPage(type === 'host' ? 'hosts' : type === 'cve' ? 'cve' : 'jobs'); setQuery(''); setResults(null); setOpen(false); };
 
   return (
-    <div ref={ref} className="top-search">
+    <div ref={ref} className="top-search" role="search">
       <div className="top-search-shell">
         <span className="top-search-icon" aria-hidden="true"><AppIcon name="search" size={17} /></span>
         <input
@@ -92,20 +113,34 @@ function GlobalSearch({ setPage }) {
           value={query}
           onFocus={() => setOpen(true)}
           onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onKeyDown={handleKeyDown}
+          aria-label="Search hosts, CVEs, and jobs"
+          aria-expanded={open}
+          aria-controls="search-results"
+          aria-activedescendant={selectedIndex >= 0 ? `search-item-${selectedIndex}` : undefined}
         />
         <span className="top-search-shortcut" aria-hidden="true">{shortcutLabel}</span>
       </div>
       {open && results && (
-        <div className="top-search-results">
+        <div id="search-results" className="top-search-results" role="listbox">
           {loading && <div style={{ padding: 12, color: '#64748b', fontSize: 13 }}>Searching...</div>}
           {!loading && results.hosts?.length === 0 && results.cves?.length === 0 && results.jobs?.length === 0 && (
             <div style={{ padding: 16, color: '#64748b', textAlign: 'center', fontSize: 13 }}>No results for "{query}"</div>
           )}
           {results.hosts?.length > 0 && (
-            <div>
+            <div role="group" aria-label="Hosts">
               <div className="top-search-group">Hosts</div>
-              {results.hosts.map(h => (
-                <div key={h.id} className="top-search-item" onClick={() => navigate('host')}>
+              {results.hosts.map((h, idx) => (
+                <div
+                  key={h.id}
+                  id={`search-item-${idx}`}
+                  role="option"
+                  className={`top-search-item ${selectedIndex === idx ? 'selected' : ''}`}
+                  onClick={() => navigate('host')}
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter') navigate('host'); }}
+                  aria-selected={selectedIndex === idx}
+                >
                   <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: '50%', background: h.is_online ? '#22c55e' : '#ef4444', boxShadow: `0 0 0 3px ${h.is_online ? 'rgba(34,197,94,0.14)' : 'rgba(239,68,68,0.14)'}`, flex: '0 0 auto', marginTop: 4 }} />
                   <div><div style={{ fontSize: 13, fontWeight: 600 }}>{h.hostname}</div><div style={{ fontSize: 11, color: '#64748b' }}>{h.ip} - {h.os}</div></div>
                 </div>
@@ -113,14 +148,26 @@ function GlobalSearch({ setPage }) {
             </div>
           )}
           {results.cves?.length > 0 && (
-            <div>
+            <div role="group" aria-label="CVEs">
               <div className="top-search-group">CVEs</div>
-              {results.cves.map(c => (
-                <div key={c.id} className="top-search-item" onClick={() => navigate('cve')}>
-                  <span className={`badge badge-${c.severity === 'critical' ? 'danger' : c.severity === 'high' ? 'warning' : 'info'}`} style={{ fontSize: 10 }}>{c.severity}</span>
-                  <div><div style={{ fontSize: 13, fontWeight: 600 }}>{c.id}</div><div style={{ fontSize: 11, color: '#64748b' }}>{c.description}</div></div>
-                </div>
-              ))}
+              {results.cves.map((c, idx) => {
+                const itemIdx = (results.hosts?.length || 0) + idx;
+                return (
+                  <div
+                    key={c.id}
+                    id={`search-item-${itemIdx}`}
+                    role="option"
+                    className={`top-search-item ${selectedIndex === itemIdx ? 'selected' : ''}`}
+                    onClick={() => navigate('cve')}
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter') navigate('cve'); }}
+                    aria-selected={selectedIndex === itemIdx}
+                  >
+                    <span className={`badge badge-${c.severity === 'critical' ? 'danger' : c.severity === 'high' ? 'warning' : 'info'}`} style={{ fontSize: 10 }}>{c.severity}</span>
+                    <div><div style={{ fontSize: 13, fontWeight: 600 }}>{c.id}</div><div style={{ fontSize: 11, color: '#64748b' }}>{c.description}</div></div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -247,31 +294,37 @@ function NotificationCenter({ setPage, toast }) {
 
   return (
     <div className="notification-center">
-      <div className="notification-trigger" onClick={()=>setIsOpen(!isOpen)}>
+      <button
+        className="notification-trigger"
+        onClick={()=>setIsOpen(!isOpen)}
+        aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+        aria-expanded={isOpen}
+        aria-haspopup="true"
+      >
         <span style={{display:'inline-flex', alignItems:'center', justifyContent:'center', color:'#0f172a'}}><BellIcon size={18} /></span>
         {unreadCount > 0 && (
           <span style={{
             position:'absolute', top:-5, right:-8, background:'red', color:'white',
             borderRadius:'50%', padding:'2px 6px', fontSize:10, fontWeight:'bold'
-          }}>{unreadCount}</span>
+          }} aria-label={`${unreadCount} unread notifications`}>{unreadCount}</span>
         )}
-      </div>
+      </button>
 
       {isOpen && (
-        <div className="notification-panel">
+        <div className="notification-panel" role="dialog" aria-label="Notifications panel" aria-modal="false">
           <div className="notification-header">
             <h4 style={{margin:0, fontSize:14}}>Notifications</h4>
             <button className="btn btn-sm btn-link" style={{fontSize:11, padding:0}} onClick={(e)=>{ e.stopPropagation(); markAllRead(); }}>Mark all read</button>
           </div>
           {notes.length === 0 ? <div className="notification-empty">No notifications</div> : (
-            <div>
+            <div role="list" aria-label="Notification list">
               {notes.map(n => {
                 const timestamp = n.created_at ? new Date(n.created_at) : null;
                 const timeLabel = timestamp && !Number.isNaN(timestamp.getTime())
                   ? timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                   : '--:--';
                 return (
-                  <div key={n.id} className={`notification-item ${n.is_read ? 'is-read' : 'is-unread'}`} onClick={()=>markRead(n.id, n.link)}>
+                  <div key={n.id} role="listitem" className={`notification-item ${n.is_read ? 'is-read' : 'is-unread'}`} onClick={()=>markRead(n.id, n.link)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') markRead(n.id, n.link); }}>
                     <div style={{display:'flex', justifyContent:'space-between', marginBottom:4}}>
                       <strong style={{fontSize:13, color: n.type.includes('fail') ? '#ef4444' : n.type.includes('success') ? '#16a34a' : 'inherit'}}>
                         {n.title}
@@ -461,6 +514,8 @@ function App() {
 
   return (
     <ToastContext.Provider value={toast}>
+    {/* Skip to content link for keyboard users */}
+    <a href="#main-content" className="skip-link">Skip to main content</a>
     <div className="app-container">
       <aside className="sidebar">
         <div className="sidebar-header">
@@ -472,9 +527,14 @@ function App() {
           </h2>
           <span className="sidebar-subtitle">by YVGROUP - Enterprise Patch Management</span>
         </div>
-        <nav className="sidebar-nav">
+        <nav className="sidebar-nav" aria-label="Main navigation">
           {navItems.map(n => (
-            <button key={n.key} className={`nav-btn ${page === n.key ? 'active' : ''}`} onClick={() => setPage(n.key)}>
+            <button
+              key={n.key}
+              className={`nav-btn ${page === n.key ? 'active' : ''}`}
+              onClick={() => setPage(n.key)}
+              aria-current={page === n.key ? 'page' : undefined}
+            >
               <span className="nav-icon" aria-hidden="true"><AppIcon name={n.icon} size={17} /></span> {n.label}
             </button>
           ))}
@@ -505,7 +565,7 @@ function App() {
           </div>
         </div>
       </aside>
-      <main className="main-content">
+      <main id="main-content" className="main-content">
         {/* License expired/not-activated popup modal */}
         {showLicensePopup && <LicensePopup licenseInfo={licenseInfo} onSuccess={() => { setShowLicensePopup(false); fetchAll(); }} />}
         {/* Expiring soon warning banner - manually dismissible */}
@@ -533,12 +593,13 @@ function App() {
               className="btn btn-sm" 
               onClick={toggleDarkMode} 
               title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              aria-label={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
               style={{padding:'8px 12px'}}
             >
               {darkMode ? '☀️' : '🌙'}
             </button>
             <NotificationCenter setPage={setPage} toast={toast} />
-            <button className="btn btn-sm" onClick={fetchAll} title="Refresh data">Refresh</button>
+            <button className="btn btn-sm" onClick={fetchAll} title="Refresh data" aria-label="Refresh data">Refresh</button>
           </div>
         </header>
         <div className="content-area">
@@ -1096,7 +1157,20 @@ function CompliancePage() {
   const [view, setView] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [hostQuery, setHostQuery] = useState('');
-  const [hostFilter, setHostFilter] = useState('all');
+  // Task 10: Filter persistence - load from localStorage
+  const [hostFilter, setHostFilter] = useState(() => {
+    try {
+      return localStorage.getItem('pm_compliance_host_filter') || 'all';
+    } catch { return 'all'; }
+  });
+
+  // Task 10: Save filter to localStorage when it changes
+  const handleHostFilterChange = (value) => {
+    setHostFilter(value);
+    try {
+      localStorage.setItem('pm_compliance_host_filter', value);
+    } catch { /* ignore storage errors */}
+  };
 
   const refreshCompliance = useCallback(() => {
     setLoading(true);
@@ -1509,8 +1583,11 @@ function CompliancePage() {
                 ['reboot', 'Reboot Queue'],
                 ['backlog', 'Patch Backlog'],
               ].map(([key, label]) => (
-                <button key={key} className={`compliance-pill ${hostFilter === key ? 'active' : ''}`} onClick={() => setHostFilter(key)}>{label}</button>
+                <button key={key} className={`compliance-pill ${hostFilter === key ? 'active' : ''}`} onClick={() => handleHostFilterChange(key)}>{label}</button>
               ))}
+              {hostFilter !== 'all' && (
+                <button className="compliance-pill" onClick={() => handleHostFilterChange('all')}>Clear</button>
+              )}
             </div>
           </div>
           <div className="table-wrap">
