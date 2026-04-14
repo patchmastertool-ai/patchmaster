@@ -1,0 +1,300 @@
+  return (
+    <div className="max-w-[1600px] mx-auto space-y-8 animate-fade-in pb-12">
+      {/* Hero Header */}
+      <section className="mb-8 p-8 rounded-2xl bg-surface-container-low border border-outline-variant/10 shadow-xl relative overflow-hidden group">
+        <div className={`absolute top-0 left-0 w-1 h-full ${channel === 'linux' ? 'bg-[#d946ef]' : 'bg-[#0ea5e9]'}`}></div>
+        <div className={`absolute top-[-20%] right-[-5%] w-[40%] h-[150%] blur-3xl pointer-events-none transition-all duration-1000 ${channel === 'linux' ? 'bg-gradient-to-l from-[#d946ef]/10 to-transparent' : 'bg-gradient-to-l from-[#0ea5e9]/10 to-transparent'}`}></div>
+        <div className="relative z-10 flex flex-col items-start gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-on-surface-variant">Fleet Operations</span>
+            </div>
+            <h2 className="text-3xl font-bold tracking-tighter text-on-surface flex items-center gap-3">
+              <span className={`material-symbols-outlined text-3xl ${channel === 'linux' ? 'text-[#d946ef]' : 'text-[#0ea5e9]'}`}>stacks</span>
+              Bulk Orchestration
+            </h2>
+            <p className="text-on-surface-variant mt-2 max-w-xl">
+              Execute cluster-wide patch events across segregated operating system channels. Select a channel to isolate the deployment sphere.
+            </p>
+          </div>
+
+          {/* OS Channel Selector */}
+          <div className="flex items-center gap-4 bg-surface-container p-2 rounded-xl border border-outline-variant/20 shadow-inner mt-2 shrink-0 overflow-x-auto max-w-full">
+             <button onClick={() => switchChannel('linux')} className={`px-5 py-2.5 rounded-lg flex items-center gap-3 text-sm font-bold transition-all whitespace-nowrap ${channel === 'linux' ? 'bg-[#d946ef]/10 text-[#d946ef] border border-[#d946ef]/30 shadow-[0_0_15px_rgba(217,70,239,0.1)]' : 'bg-transparent text-on-surface-variant hover:text-on-surface border border-transparent'}`}>
+                <span className="material-symbols-outlined text-[18px]">terminal</span>
+                LINUX CLUSTER
+                <span className={`px-2 py-0.5 rounded text-[10px] ${channel === 'linux' ? 'bg-[#d946ef] text-white' : 'bg-surface-container-high text-on-surface-variant'}`}>{linuxHosts.length}</span>
+             </button>
+             <button onClick={() => switchChannel('windows')} className={`px-5 py-2.5 rounded-lg flex items-center gap-3 text-sm font-bold transition-all whitespace-nowrap ${channel === 'windows' ? 'bg-[#0ea5e9]/10 text-[#0ea5e9] border border-[#0ea5e9]/30 shadow-[0_0_15px_rgba(14,165,233,0.1)]' : 'bg-transparent text-on-surface-variant hover:text-on-surface border border-transparent'}`}>
+                <span className="material-symbols-outlined text-[18px]">window</span>
+                WINDOWS CLUSTER
+                <span className={`px-2 py-0.5 rounded text-[10px] ${channel === 'windows' ? 'bg-[#0ea5e9] text-white' : 'bg-surface-container-high text-on-surface-variant'}`}>{windowsHosts.length}</span>
+             </button>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left Column: Target Scope */}
+        <div className="lg:col-span-8 flex flex-col gap-8">
+           
+           <div className="bg-surface-container rounded-2xl border border-outline-variant/10 shadow-2xl relative overflow-hidden flex flex-col min-h-[450px]">
+              <div className="px-6 py-5 border-b border-outline-variant/10 flex justify-between items-center bg-surface-container-low">
+                 <div>
+                    <h3 className="text-lg font-bold text-on-surface flex items-center gap-2">
+                       <span className={`material-symbols-outlined ${channel === 'linux' ? 'text-[#d946ef]' : 'text-[#0ea5e9]'}`}>dns</span>
+                       Targeting Canvas
+                    </h3>
+                    <p className="text-xs text-on-surface-variant mt-1">{selectedIds.length} of {channelHosts.length} nodes isolated for execution</p>
+                 </div>
+                 <button className="bg-surface-highest hover:bg-surface-bright text-on-surface px-4 py-1.5 rounded text-xs font-bold border border-outline-variant/20 transition-colors" onClick={toggleAll}>
+                    {allSelected ? 'Drop Scope' : 'Select Sphere'}
+                 </button>
+              </div>
+
+              <div className="flex-1 overflow-x-auto p-0">
+                 {channelHosts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-on-surface-variant opacity-50 py-20">
+                       <span className="material-symbols-outlined text-6xl mb-4">blur_on</span>
+                       <p className="text-sm uppercase tracking-widest font-bold">No nodes registered in {channel} channel</p>
+                    </div>
+                 ) : (
+                    <table className="w-full text-left">
+                       <thead className="bg-surface-container-low border-b border-outline-variant/10 sticky top-0">
+                          <tr>
+                             <th className="py-3 px-6 w-12 text-center text-[10px] uppercase font-black tracking-widest text-on-surface-variant">Inc</th>
+                             <th className="py-3 px-6 text-[10px] uppercase font-black tracking-widest text-on-surface-variant">Node Identifier</th>
+                             <th className="py-3 px-6 text-[10px] uppercase font-black tracking-widest text-on-surface-variant">Platform Env</th>
+                             <th className="py-3 px-6 text-[10px] uppercase font-black tracking-widest text-on-surface-variant text-right">Telemetry</th>
+                          </tr>
+                       </thead>
+                       <tbody className="divide-y divide-outline-variant/5">
+                          {channelHosts.map(h => {
+                             const isSelected = selectedIds.includes(h.id);
+                             return (
+                                <tr key={h.id} className={`group cursor-pointer transition-colors ${isSelected ? `bg-${channel === 'linux' ? '[#d946ef]' : '[#0ea5e9]'}/5` : 'hover:bg-surface-container-high'}`} onClick={() => toggleHost(h.id)}>
+                                   <td className="py-4 px-6 text-center">
+                                      <input type="checkbox" className={`rounded bg-surface-container-highest border-outline-variant h-4 w-4 transition-colors ${channel === 'linux' ? 'text-[#d946ef] focus:ring-[#d946ef]' : 'text-[#0ea5e9] focus:ring-[#0ea5e9]'}`} checked={isSelected} onChange={() => {}} />
+                                   </td>
+                                   <td className="py-4 px-6">
+                                      <span className="text-sm font-bold text-on-surface block">{h.hostname}</span>
+                                      <span className="text-[10px] font-mono text-on-surface-variant">{h.ip}</span>
+                                   </td>
+                                   <td className="py-4 px-6 text-xs text-secondary-dim">{h.os || 'Unknown Core'}</td>
+                                   <td className="py-4 px-6 text-right">
+                                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] uppercase tracking-widest font-black ${h.is_online ? 'bg-success/10 text-success border border-success/20' : 'bg-error/10 text-error border border-error/20'}`}>
+                                         <span className={`w-1.5 h-1.5 rounded-full ${h.is_online ? 'bg-success' : 'bg-error'}`}></span>
+                                         {h.is_online ? 'Online' : 'Lost'}
+                                      </span>
+                                   </td>
+                                </tr>
+                             )
+                          })}
+                       </tbody>
+                    </table>
+                 )}
+              </div>
+           </div>
+
+        </div>
+
+        {/* Right Column: Execution Configuration */}
+        <div className="lg:col-span-4 flex flex-col gap-6">
+           <div className="bg-surface-container rounded-2xl border border-outline-variant/10 shadow-2xl p-6 relative overflow-hidden">
+              <div className={`absolute top-0 left-0 w-full h-1 ${channel === 'linux' ? 'bg-[#d946ef]' : 'bg-[#0ea5e9]'}`}></div>
+              <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-on-surface-variant flex items-center mb-6 mt-1">
+                 <span className="material-symbols-outlined text-[16px] mr-2 text-primary">build_circle</span>
+                 Execution Engine
+              </h3>
+              
+              <div className="space-y-5">
+                 <div>
+                    <label className="text-[10px] uppercase font-bold tracking-widest text-on-surface-variant block mb-1.5">Job Signature</label>
+                    <input className="w-full bg-surface-container-high border-none rounded-xl text-sm text-on-surface py-3 px-4 focus:ring-1 focus:ring-primary shadow-inner" placeholder="e.g. Q3 Security Rollout" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                 </div>
+                 
+                 <div>
+                    <label className="text-[10px] uppercase font-bold tracking-widest text-on-surface-variant block mb-1.5">Vector Action</label>
+                    <select className="w-full bg-surface-container-high border-none rounded-xl text-sm text-on-surface py-3 px-4 focus:ring-1 focus:ring-primary shadow-inner" value={form.action} onChange={e => setForm({ ...form, action: e.target.value })}>
+                       <option value="server_patch">Full Stack Resolution</option>
+                       <option value="upgrade">Upgrade Existing Baseline</option>
+                       <option value="install">Inject Specific Package</option>
+                    </select>
+                 </div>
+
+                 <div>
+                    <label className="text-[10px] uppercase font-bold tracking-widest text-on-surface-variant block mb-1.5">Explicit Package Matrix (Opt)</label>
+                    <textarea className="w-full bg-surface-container-high border-none rounded-xl text-xs text-on-surface p-3 focus:ring-1 focus:ring-primary shadow-inner font-mono h-24 resize-none" placeholder="nginx docker-ce" value={form.packages} onChange={e => setForm({ ...form, packages: e.target.value })}></textarea>
+                 </div>
+
+                 <div className="bg-surface-container-low p-4 rounded-xl border border-outline-variant/5 space-y-3 mt-2">
+                    {[
+                       { id: 'dry_run', label: 'Dry Run Mode', sub: 'Validate solver without executing', value: form.dry_run, color: 'text-tertiary' },
+                       { id: 'auto_snapshot', label: 'Proactive Snapshots', sub: 'Hypervisor state backup pre-check', value: form.auto_snapshot, color: 'text-primary' },
+                       { id: 'auto_rollback', label: 'Fail-Safe Rollback', sub: 'Revert if post-flight checks fail', value: form.auto_rollback, color: 'text-[#d946ef]' }
+                    ].map(t => (
+                       <label key={t.id} className="flex items-start gap-3 cursor-pointer group">
+                          <div className={`mt-0.5 relative inline-flex items-center h-4 rounded-full w-8 transition-colors ${t.value ? 'bg-primary' : 'bg-surface-container-highest'}`}>
+                             <div className={`inline-block w-2.5 h-2.5 transform bg-white rounded-full transition-transform ${t.value ? 'translate-x-4.5' : 'translate-x-1'}`} />
+                          </div>
+                          <input type="checkbox" className="sr-only" checked={t.value} onChange={e => setForm({ ...form, [t.id]: e.target.checked })} />
+                          <div className="flex-1">
+                             <span className={`text-[11px] font-bold uppercase tracking-wider transition-colors block ${t.value ? t.color : 'text-on-surface'}`}>{t.label}</span>
+                             <span className="text-[9px] text-on-surface-variant">{t.sub}</span>
+                          </div>
+                       </label>
+                    ))}
+                 </div>
+                 
+                 <div className="pt-2">
+                    <button className={`w-full py-3.5 rounded-xl text-sm font-black tracking-wider uppercase flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-lg ${form.dry_run ? 'bg-tertiary text-on-tertiary hover:brightness-110' : channel === 'linux' ? 'bg-[#d946ef] text-white hover:bg-[#c026d3]' : 'bg-[#0ea5e9] text-white hover:bg-[#0284c7]'}`} onClick={submit} disabled={submitting || !selectedIds.length || !form.name.trim()}>
+                       {submitting ? (
+                          <span className="material-symbols-outlined animate-spin text-[18px]">sync</span>
+                       ) : (
+                          <span className="material-symbols-outlined text-[18px]">{form.dry_run ? 'science' : 'bolt'}</span>
+                       )}
+                       {submitting ? 'Authenticating...' : form.dry_run ? 'Simulate Blast' : `Execute on ${selectedIds.length} Nodes`}
+                    </button>
+                    {selectedIds.length === 0 && <p className="text-[10px] text-center text-error mt-2 font-bold uppercase tracking-widest animate-pulse">Select nodes to deploy</p>}
+                 </div>
+              </div>
+           </div>
+        </div>
+      </div>
+
+      {/* Bulk Job Lineage Table */}
+      <div className="bg-surface-container rounded-2xl border border-outline-variant/10 shadow-2xl relative overflow-hidden mt-8 min-h-[300px]">
+          <div className="px-6 py-5 border-b border-outline-variant/10 flex justify-between items-center bg-surface-container-low">
+             <h3 className="text-lg font-bold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-success">checklist</span>
+                Orchestration Ledger
+             </h3>
+             <button className="text-[10px] font-bold text-primary uppercase tracking-widest hover:underline disabled:opacity-50" onClick={loadJobs} disabled={jobsLoading}>
+                {jobsLoading ? 'Syncing...' : 'Reload Ledger'}
+             </button>
+          </div>
+          <div className="overflow-x-auto p-6">
+             {jobs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant opacity-50">
+                   <span className="material-symbols-outlined text-4xl mb-3">auto_awesome_motion</span>
+                   <p className="text-xs uppercase tracking-widest font-bold">No orchestration traces found.</p>
+                </div>
+             ) : (
+                <table className="w-full text-left">
+                   <thead className="border-b border-outline-variant/20">
+                      <tr>
+                         <th className="py-2 px-4 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Signature ID</th>
+                         <th className="py-2 px-4 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Vector</th>
+                         <th className="py-2 px-4 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Nodes</th>
+                         <th className="py-2 px-4 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant text-success">Passed</th>
+                         <th className="py-2 px-4 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant text-error">Failed</th>
+                         <th className="py-2 px-4 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Lifecycle State</th>
+                         <th className="py-2 px-4 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Execution Time</th>
+                         <th className="py-2 px-4 text-right text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Trace</th>
+                      </tr>
+                   </thead>
+                   <tbody className="divide-y divide-outline-variant/5">
+                      {jobs.map(j => {
+                         const sColor = statusColor(j.status);
+                         const isSuccess = j.status === 'completed';
+                         const isFailed = j.status === 'failed';
+                         const isRun = j.status === 'running';
+
+                         return (
+                            <tr key={j.id} className="hover:bg-surface-container-high transition-colors">
+                               <td className="py-3 px-4">
+                                  <span className="text-xs font-bold text-on-surface">{j.name}</span>
+                               </td>
+                               <td className="py-3 px-4">
+                                  <span className="text-[10px] font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">{j.action}</span>
+                               </td>
+                               <td className="py-3 px-4 text-xs font-bold font-mono">{j.total_hosts}</td>
+                               <td className="py-3 px-4 text-xs font-bold font-mono text-success">{j.success_count ?? '—'}</td>
+                               <td className="py-3 px-4 text-xs font-bold font-mono text-error">{j.failed_count ?? '—'}</td>
+                               <td className="py-3 px-4">
+                                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] uppercase tracking-widest font-black ${isSuccess ? 'bg-success/20 text-success border border-success/30' : isFailed ? 'bg-error/20 text-error border border-error/30' : 'bg-tertiary/20 text-tertiary border border-tertiary/30'}`}>
+                                     {j.status}
+                                  </span>
+                               </td>
+                               <td className="py-3 px-4 text-[10px] font-mono text-on-surface-variant">
+                                  {j.started_at ? new Date(j.started_at).toLocaleString() : '—'}
+                               </td>
+                               <td className="py-3 px-4 text-right">
+                                  <button className="bg-surface-container-highest hover:bg-surface-bright text-xs text-on-surface px-3 py-1.5 rounded font-bold border border-outline-variant/20 transition-all shadow-sm" onClick={() => loadDetail(j.id)}>
+                                     Trace Log
+                                  </button>
+                               </td>
+                            </tr>
+                         )
+                      })}
+                   </tbody>
+                </table>
+             )}
+          </div>
+      </div>
+
+      {/* Detail Trace Modal */}
+      {detail && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setDetail(null)}>
+            <div className="bg-surface-container-low border border-outline-variant/20 shadow-2xl rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+               <div className="p-6 border-b border-outline-variant/10 bg-surface-container/50 flex justify-between items-center shrink-0">
+                  <h3 className="text-xl font-bold tracking-tight text-on-surface">Vector: <span className="text-primary">{detail.name}</span></h3>
+                  <button className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-error transition-colors" onClick={() => setDetail(null)}>
+                     <span className="material-symbols-outlined text-[16px]">close</span>
+                  </button>
+               </div>
+               
+               <div className="p-6 shrink-0 grid grid-cols-4 gap-4 border-b border-outline-variant/5">
+                  {[
+                     { l: 'Total Traversal', v: detail.total_hosts ?? '—', c: 'text-on-surface' },
+                     { l: 'Successful Binds', v: detail.success_count ?? '—', c: 'text-success' },
+                     { l: 'Failed Hooks', v: detail.failed_count ?? '—', c: 'text-error' },
+                     { l: 'System Mode', v: detail.action, c: 'text-primary' }
+                  ].map(stat => (
+                     <div key={stat.l} className="bg-surface-container p-4 rounded-xl border border-outline-variant/10 text-center">
+                        <strong className={`block text-2xl font-black font-mono mb-1 ${stat.c}`}>{stat.v}</strong>
+                        <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">{stat.l}</span>
+                     </div>
+                  ))}
+               </div>
+
+               <div className="flex-1 overflow-y-auto p-6 bg-[#050b14]">
+                  <table className="w-full text-left">
+                     <thead className="border-b border-outline-variant/20 sticky top-0 bg-[#050b14] z-10">
+                        <tr>
+                           <th className="py-2 px-2 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Host ID</th>
+                           <th className="py-2 px-2 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Agent Shell ID</th>
+                           <th className="py-2 px-2 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant text-right">Micro-Status</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-outline-variant/10">
+                        {(detail.jobs || []).map(j => {
+                           const sColor = statusColor(j.status);
+                           const isC = j.status === 'completed' || j.status === 'success';
+                           const isF = j.status === 'failed';
+                           return (
+                              <tr key={j.job_id} className="hover:bg-surface-container/50">
+                                 <td className="py-2 px-2 text-xs font-bold text-on-surface">{j.hostname}</td>
+                                 <td className="py-2 px-2 text-xs font-mono text-tertiary">#{j.job_id}</td>
+                                 <td className="py-2 px-2 text-right">
+                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] uppercase tracking-widest font-black ${isC ? 'bg-success/20 text-success' : isF ? 'bg-error/20 text-error' : 'bg-tertiary/20 text-tertiary'}`}>
+                                       {j.status}
+                                    </span>
+                                 </td>
+                              </tr>
+                           )
+                        })}
+                        {!(detail.jobs || []).length && (
+                           <tr>
+                              <td colSpan={3} className="py-8 text-center text-[10px] uppercase font-bold tracking-widest text-on-surface-variant opacity-40">Zero telemetry packets received</td>
+                           </tr>
+                        )}
+                     </tbody>
+                  </table>
+               </div>
+            </div>
+         </div>
+      )}
+    </div>
+  );
+}

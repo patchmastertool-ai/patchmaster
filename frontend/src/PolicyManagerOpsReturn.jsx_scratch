@@ -1,0 +1,241 @@
+  return (
+    <div className="max-w-[1600px] mx-auto space-y-8 animate-fade-in pb-12 flex h-[90vh] overflow-hidden flex-col">
+      {/* Page Context */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 rounded-2xl bg-surface-container-low border border-outline-variant/10 shadow-xl shrink-0">
+        <div>
+           <h2 className="text-2xl font-bold tracking-tighter text-on-surface flex items-center gap-3">
+              <span className="material-symbols-outlined text-[#7bd0ff] text-3xl">policy</span>
+              Policy Workspace
+           </h2>
+           <p className="text-sm text-on-surface-variant mt-1 max-w-xl">
+              Construct Configuration Policies, dry-run deployment plans, review revision matrices, and execute granular administrative automation.
+           </p>
+        </div>
+        <div className="flex items-center gap-4 mt-4 md:mt-0">
+           {notice && (
+              <div className="px-4 py-2 bg-primary/10 border border-primary/20 text-primary rounded-lg text-xs font-mono max-w-xs truncate">
+                 {notice}
+              </div>
+           )}
+           <select className="bg-surface-container-high border-none rounded-lg text-sm text-on-surface py-2 pl-4 pr-10 focus:ring-1 focus:ring-primary shadow-inner" value={selectedPolicyId} onChange={e => { setSelectedPolicyId(e.target.value); setShowCreate(false); }}>
+              <option value="">-- View Policy Directory --</option>
+              {policies.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+           </select>
+           <button className="bg-[#004c69] hover:bg-primary-container/80 text-[#7bd0ff] border border-primary/20 px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow-lg flex items-center gap-2" onClick={() => setShowCreate(v => !v)}>
+              <span className="material-symbols-outlined text-[16px]">{showCreate ? 'close' : 'add'}</span>
+              {showCreate ? 'Cancel' : 'New Policy'}
+           </button>
+        </div>
+      </div>
+
+      {showCreate && (
+         <div className="bg-surface-container p-6 rounded-2xl border border-primary/30 shadow-2xl animate-fade-in shrink-0 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-primary/50"></div>
+            <h3 className="text-sm font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+               <span className="material-symbols-outlined text-[18px]">add_box</span>
+               Create New Policy Sequence
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+               <input className="bg-surface-container-high border-none rounded-lg text-sm text-on-surface py-3 px-4 focus:ring-1 focus:ring-primary shadow-inner" placeholder="Policy Name" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+               <input className="bg-surface-container-high border-none rounded-lg text-sm text-on-surface py-3 px-4 focus:ring-1 focus:ring-primary shadow-inner" placeholder="Architecture Description" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+               <input className="bg-surface-container-high border-none rounded-lg text-sm text-on-surface py-3 px-4 focus:ring-1 focus:ring-primary shadow-inner md:col-span-2" placeholder="Initial Change Summary" value={formData.change_summary} onChange={e => setFormData({ ...formData, change_summary: e.target.value })} />
+            </div>
+            <textarea className="w-full bg-[#050b14] border border-outline-variant/20 rounded-xl p-4 h-[300px] font-mono text-xs text-secondary-dim focus:ring-1 focus:ring-primary" value={formData.yaml_content} onChange={e => setFormData({ ...formData, yaml_content: e.target.value })}></textarea>
+            <div className="mt-4 flex justify-end">
+               <button className="bg-primary text-on-primary px-6 py-2.5 rounded-lg text-sm font-bold uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-[0_0_15px_rgba(123,208,255,0.2)] disabled:opacity-50" onClick={createPolicy} disabled={loading || !formData.name}>
+                  {loading ? 'Committing...' : 'Commit Baseline Policy'}
+               </button>
+            </div>
+         </div>
+      )}
+
+      {/* Main Split Interface */}
+      {!showCreate && selectedPolicy && (
+        <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden min-h-0 relative">
+          
+          {/* Left Canvas: YAML Code Base & Revisions */}
+          <div className="flex-1 flex flex-col bg-surface-container rounded-2xl border border-outline-variant/10 shadow-2xl relative overflow-hidden">
+             
+             {/* Header Bar */}
+             <div className="px-6 py-4 flex items-center justify-between border-b border-outline-variant/10 bg-surface-container-low min-h-[70px]">
+                <div>
+                   <div className="flex items-center space-x-2 mb-1">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant flex items-center">
+                         <span className="material-symbols-outlined text-[12px] mr-1">description</span>
+                         Policy Syntax
+                      </span>
+                      {selectedPolicy.active_revision?.id && String(selectedRevisionId) === String(selectedPolicy.active_revision?.id) && (
+                         <span className="px-2 py-0.5 rounded text-[8px] font-black bg-success/20 text-success uppercase tracking-widest border border-success/30 animate-pulse">DEPLOYED</span>
+                      )}
+                   </div>
+                   <h1 className="text-lg font-bold tracking-tight text-on-surface truncate pr-4">{selectedPolicy.name}</h1>
+                </div>
+                <div className="flex items-center gap-3">
+                   <button className="text-xs text-on-surface-variant hover:text-on-surface flex items-center gap-1.5 transition-colors">
+                      <span className="material-symbols-outlined text-[16px]">history</span>
+                      <span className="font-bold uppercase tracking-wider hidden sm:block">Compare</span>
+                   </button>
+                   <button className="bg-[#004c69] hover:bg-primary-container/80 text-[#7bd0ff] px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow-md active:scale-95 disabled:opacity-50 border border-primary/20 flex items-center gap-2" onClick={saveDraft} disabled={loading}>
+                      <span className="material-symbols-outlined text-[16px]">save</span>
+                      <span className="hidden sm:block">{loading ? 'Saving...' : 'Save Draft Snapshot'}</span>
+                   </button>
+                </div>
+             </div>
+
+             {/* Code Editor Matrix */}
+             <div className="flex-1 flex overflow-hidden">
+                 <div className="flex-1 bg-[#050b14] relative">
+                    <textarea 
+                       className="w-full h-full p-6 bg-transparent border-none focus:ring-0 font-mono text-[13px] leading-relaxed text-[#f8f8f2] resize-none overflow-y-auto no-scrollbar outline-none" 
+                       value={draftData.yaml_content} 
+                       onChange={e => setDraftData({ ...draftData, yaml_content: e.target.value })}
+                       spellCheck="false"
+                       style={{ lineHeight: '1.6' }}
+                    />
+                 </div>
+                 
+                 {/* Revisions Sidebar */}
+                 <div className="w-[300px] border-l border-outline-variant/10 bg-surface-container-low flex flex-col min-w-[200px]">
+                    <div className="p-4 border-b border-outline-variant/10">
+                       <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant flex items-center">
+                          <span className="material-symbols-outlined text-sm mr-2">timeline</span>
+                          Revision Lineage
+                       </h3>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 relative no-scrollbar">
+                       <div className="absolute left-6 top-6 bottom-6 w-px bg-outline-variant/20"></div>
+                       {revisions.map((rev) => {
+                          const isActive = rev.status === 'active';
+                          const isSelected = String(selectedRevisionId) === String(rev.id);
+                          return (
+                             <div key={rev.id} className="relative pl-7 group">
+                                <div className={`absolute left-0 top-1.5 w-[14px] h-[14px] rounded-full border-4 border-surface-container-low flex items-center justify-center transition-colors cursor-pointer ${isSelected ? 'bg-primary' : isActive ? 'bg-success' : 'bg-outline-variant/50 hover:bg-on-surface-variant'}`} onClick={() => setSelectedRevisionId(String(rev.id))}>
+                                </div>
+                                <div className={`mb-1 flex justify-between items-start cursor-pointer px-1 py-0.5 rounded transition-colors ${isSelected ? 'bg-primary/10' : 'hover:bg-surface-container-high'}`} onClick={() => setSelectedRevisionId(String(rev.id))}>
+                                   <span className={`text-[11px] font-bold ${isSelected ? 'text-primary' : 'text-on-surface opacity-80'}`}>r{rev.revision_number} {isActive ? '(Live)' : ''}</span>
+                                </div>
+                                <p className="text-[10px] text-secondary-dim font-mono mb-1 truncate px-1" title={rev.change_summary || rev.name}>{rev.change_summary || rev.name || 'Anonymous Draft'}</p>
+                             </div>
+                          )
+                       })}
+                    </div>
+                 </div>
+             </div>
+
+             {/* IDE Footer */}
+             <div className="px-6 py-2 bg-surface-container flex items-center justify-between border-t border-outline-variant/10 text-[9px] font-bold tracking-widest uppercase text-on-surface-variant">
+                <div className="flex items-center space-x-4">
+                   <div className="flex items-center space-x-1.5 text-primary">
+                      <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                      <span>Targeting Verified</span>
+                   </div>
+                   <div className="w-px h-3 bg-outline-variant/30"></div>
+                   <span>YAML 1.2</span>
+                </div>
+                <div>{draftData.yaml_content.split('\n').length} LINES</div>
+             </div>
+          </div>
+
+          {/* Right Core Actions: Rollout and Automation */}
+          <div className="lg:w-[420px] flex flex-col gap-6 overflow-y-auto no-scrollbar shrink-0">
+             
+             {/* Target Execution Matrix */}
+             <div className="bg-surface-container rounded-2xl border border-outline-variant/10 shadow-xl overflow-hidden glass-gradient">
+                <div className="p-5 border-b border-outline-variant/10 bg-surface-container-high/50">
+                   <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-on-surface-variant flex items-center">
+                      <span className="material-symbols-outlined text-[16px] mr-2 text-[#d946ef]">rocket_launch</span>
+                      Deployment Scope
+                   </h3>
+                </div>
+                
+                <div className="p-5 flex flex-col gap-4">
+                   <div className="max-h-[160px] overflow-y-auto border border-outline-variant/10 rounded-xl p-2 bg-[#050b14] space-y-1 no-scrollbar">
+                      {hosts.length === 0 ? <p className="text-[10px] text-on-surface-variant p-2">Wait, no hosts exist in cluster.</p> : hosts.map((host) => (
+                         <label key={host.id} className="flex items-center justify-between p-2 hover:bg-surface-container-high rounded cursor-pointer group">
+                            <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                               <input type="checkbox" className="rounded bg-surface-container-lowest border-outline-variant text-[#d946ef] focus:ring-1 focus:ring-[#d946ef] h-3.5 w-3.5" checked={selectedHosts.includes(host.id)} onChange={(e) => setSelectedHosts((prev) => e.target.checked ? [...prev, host.id] : prev.filter((id) => id !== host.id))} />
+                               <span className="text-xs font-mono text-on-surface truncate">{host.hostname}</span>
+                            </div>
+                            <span className="text-[9px] uppercase tracking-widest text-on-surface-variant opacity-50 group-hover:opacity-100">{host.site || host.ip}</span>
+                         </label>
+                      ))}
+                   </div>
+                   
+                   <div className="flex items-center justify-between py-2 border-t border-outline-variant/10">
+                      <span className="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">Effective Blast Radius</span>
+                      <span className="text-xs font-black text-[#d946ef]">{selectedHosts.length} NODES</span>
+                   </div>
+
+                   <div className="grid grid-cols-2 gap-2">
+                       <button className="py-2 bg-surface-container-highest hover:bg-surface-bright text-xs font-bold text-on-surface border border-outline-variant/20 rounded shadow-sm disabled:opacity-50 transition-colors" disabled={loading || !selectedRevisionId || selectedHosts.length === 0} onClick={() => runRevisionAction('dry-run', selectedRevisionId)}>
+                          Run Simulation
+                       </button>
+                       <button className="py-2 bg-[#d946ef] hover:brightness-110 text-white text-xs font-bold uppercase tracking-wider rounded shadow-[0_0_15px_rgba(217,70,239,0.2)] disabled:opacity-50 transition-all flex justify-center items-center gap-1.5" disabled={loading || !selectedRevisionId || selectedHosts.length === 0} onClick={() => runRevisionAction('apply', selectedRevisionId)}>
+                          <span className="material-symbols-outlined text-[14px]">bolt</span>
+                          Deploy App
+                       </button>
+                   </div>
+                   <div className="grid grid-cols-2 gap-2">
+                       <button className="py-2 bg-surface-container-lowest text-on-surface-variant hover:text-success text-[10px] font-bold uppercase border border-outline-variant/10 rounded disabled:opacity-50 transition-colors" disabled={loading || !selectedRevisionId || selectedHosts.length === 0} onClick={() => runRevisionAction('activate', selectedRevisionId)}>
+                          Set Default Rev
+                       </button>
+                       <button className="py-2 bg-error/10 border border-error/20 text-error hover:bg-error hover:text-white text-[10px] font-bold uppercase rounded disabled:opacity-50 transition-colors" disabled={loading || !selectedRevisionId || selectedHosts.length === 0} onClick={() => runRevisionAction('rollback', selectedRevisionId)}>
+                          Rollback Rev
+                       </button>
+                   </div>
+                </div>
+             </div>
+
+             {/* Admin Task Automation */}
+             <div className="bg-surface-container rounded-2xl border border-outline-variant/10 shadow-xl overflow-hidden glass-gradient flex-1 flex flex-col">
+                <div className="p-5 border-b border-outline-variant/10 bg-surface-container-high/50">
+                   <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-on-surface-variant flex items-center">
+                      <span className="material-symbols-outlined text-[16px] mr-2 text-tertiary">engineering</span>
+                      One-Off Automation
+                   </h3>
+                </div>
+                
+                <div className="p-5 flex flex-col gap-3">
+                   <select className="w-full bg-surface-container-highest border border-outline-variant/10 rounded-lg text-xs text-on-surface py-2.5 px-3 focus:ring-1 focus:ring-tertiary" value={taskForm.template_id} onChange={(e) => setTaskForm({ ...taskForm, template_id: e.target.value })}>
+                      <option value="">-- Select Template Script --</option>
+                      {taskTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                   </select>
+                   <select className="w-full bg-surface-container-highest border border-outline-variant/10 rounded-lg text-xs text-on-surface py-2.5 px-3 focus:ring-1 focus:ring-tertiary" value={taskForm.host_id} onChange={(e) => setTaskForm({ ...taskForm, host_id: e.target.value })}>
+                      <option value="">-- Drop Target Host --</option>
+                      {hosts.map((h) => <option key={h.id} value={h.id}>{h.hostname} ({h.ip})</option>)}
+                   </select>
+                   <input className="w-full bg-surface-container-highest border border-outline-variant/10 rounded-lg text-xs text-on-surface py-2.5 px-3 font-mono focus:ring-1 focus:ring-tertiary" placeholder="Bundle URL / Params (Optional)" value={taskForm.bundle_url} onChange={(e) => setTaskForm({ ...taskForm, bundle_url: e.target.value })} />
+                   
+                   <button className="w-full py-2.5 mt-2 bg-tertiary hover:brightness-110 text-on-tertiary text-xs font-bold uppercase tracking-wider rounded-lg shadow-[0_0_15px_rgba(255,209,111,0.2)] disabled:opacity-50 transition-all flex justify-center items-center gap-2" disabled={loading || !taskForm.template_id || !taskForm.host_id} onClick={executeAdminTask}>
+                      <span className="material-symbols-outlined text-[16px]">{loading ? 'hourglass_empty' : 'terminal'}</span>
+                      {loading ? 'Queuing' : 'Inject Call'}
+                   </button>
+                </div>
+                
+                {/* Last Actions / Logs */}
+                <div className="flex-1 border-t border-outline-variant/10 bg-[#06122d] p-0 overflow-hidden flex flex-col">
+                   <div className="px-5 py-2 border-b border-outline-variant/5 bg-surface-container-lowest/50">
+                      <span className="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold">Automation Audit Trail</span>
+                   </div>
+                   <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-2">
+                       {taskExecutions.length === 0 ? <p className="text-[10px] text-center text-on-surface-variant p-2">No task history found.</p> : taskExecutions.map(exec => (
+                          <div key={exec.id} className={`p-2.5 rounded bg-surface border-l-2 text-xs flex justify-between items-start ${exec.status === 'success' ? 'border-success' : exec.status === 'failed' ? 'border-error' : 'border-tertiary'}`}>
+                             <div>
+                                <span className={`font-mono text-[10px] block mb-0.5 ${exec.status === 'success' ? 'text-success' : exec.status === 'failed' ? 'text-error' : 'text-tertiary'}`}>[{exec.status.toUpperCase()}]</span>
+                                <span className="text-on-surface truncate block max-w-[200px] font-bold">{exec.template?.name || exec.task_key}</span>
+                                <span className="text-[9px] text-on-surface-variant uppercase tracking-widest block mt-1">on {exec.host?.hostname || '--'}</span>
+                             </div>
+                             <span className="text-[9px] font-mono text-outline-variant mt-0.5">{exec.result_summary?.rc !== undefined ? `rc=${exec.result_summary.rc}` : 'wait'}</span>
+                          </div>
+                       ))}
+                   </div>
+                </div>
+             </div>
+
+          </div>
+
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,194 @@
+  return (
+    <div className="max-w-[1600px] mx-auto space-y-8 animate-fade-in pb-12">
+      {/* Header Context */}
+      <section className="mb-0 p-8 rounded-2xl bg-surface-container-low border border-outline-variant/10 shadow-xl relative overflow-hidden group">
+        <div className="absolute top-0 left-0 w-1 h-full bg-[#f97316]"></div>
+        <div className="absolute top-[-20%] right-[-5%] w-[40%] h-[150%] blur-3xl pointer-events-none transition-all duration-1000 bg-gradient-to-l from-[#f97316]/10 to-transparent"></div>
+        <div className="relative z-10 flex flex-col items-start gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-on-surface-variant flex items-center">
+                 <span className="material-symbols-outlined text-[12px] mr-1">healing</span>
+                 Vulnerability Management
+              </span>
+            </div>
+            <h2 className="text-3xl font-bold tracking-tighter text-on-surface flex items-center gap-3">
+              <span className="material-symbols-outlined text-3xl text-[#f97316]">verified_user</span>
+              Remediation Action Center
+            </h2>
+            <p className="text-on-surface-variant mt-2 max-w-2xl text-sm">
+              Track and resolve identified CVEs across the infrastructure. Update mitigation statuses, assign owners, and monitor SLA compliance for open critical vulnerabilities.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* KPI Stats Belt */}
+      {summary && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+           {[
+             { label: 'Active Critical / Open', val: summary.open, icon: 'warning', c: 'text-error', bg: 'bg-error/10' },
+             { label: 'Under Mitigation', val: summary.in_progress, icon: 'pending_actions', c: 'text-tertiary', bg: 'bg-tertiary/10' },
+             { label: 'Resolved Tickets', val: summary.resolved, icon: 'check_circle', c: 'text-success', bg: 'bg-success/10' },
+             { label: 'SLA Breached', val: summary.overdue, icon: 'alarm', c: 'text-[#d946ef]', bg: 'bg-[#d946ef]/10' },
+           ].map(s => (
+             <div key={s.label} className="bg-surface-container p-6 rounded-2xl border border-outline-variant/5 shadow-lg flex flex-col justify-between group hover:border-outline-variant/20 transition-colors">
+                <div className="flex justify-between items-start mb-4">
+                   <span className="text-[10px] uppercase font-bold tracking-widest text-on-surface-variant max-w-[100px] leading-tight">{s.label}</span>
+                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${s.bg} ${s.c}`}>
+                      <span className="material-symbols-outlined text-[18px]">{s.icon}</span>
+                   </div>
+                </div>
+                <div>
+                   <strong className="text-3xl font-black text-on-surface block">{s.val}</strong>
+                </div>
+             </div>
+           ))}
+        </div>
+      )}
+
+      {/* Filters & Datatable */}
+      <div className="bg-surface-container rounded-2xl border border-outline-variant/10 shadow-2xl relative overflow-hidden glass-gradient">
+         
+         {/* Filter Strip */}
+         <div className="px-6 py-4 border-b border-outline-variant/10 bg-surface-container-low flex items-center justify-between overflow-x-auto gap-4 scrollbar-hide">
+            <div className="flex gap-2">
+               {['all', 'open', 'in_progress', 'resolved', 'accepted_risk', 'false_positive'].map(s => (
+                  <button key={s} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${statusFilter === s ? 'bg-primary/20 text-primary border border-primary/30 shadow-md' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-highest bg-transparent border border-transparent'}`} onClick={() => setStatusFilter(s)}>
+                     {s === 'all' ? 'All Ledger' : s.replace('_', ' ')}
+                  </button>
+               ))}
+            </div>
+            <button className="text-[10px] font-bold text-primary uppercase tracking-widest hover:underline whitespace-nowrap" onClick={load}>Reload View</button>
+         </div>
+
+         {/* Extracted Datatable */}
+         <div className="overflow-x-auto min-h-[400px]">
+             <table className="w-full text-left">
+                <thead className="border-b border-outline-variant/20 bg-surface-container-high/50 sticky top-0 z-10">
+                   <tr>
+                      <th className="py-3 px-6 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Asset Identifier</th>
+                      <th className="py-3 px-6 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Vulnerability ID</th>
+                      <th className="py-3 px-6 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant text-center">Threat Lvl</th>
+                      <th className="py-3 px-6 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant text-center">CVSS</th>
+                      <th className="py-3 px-6 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Mitigation State</th>
+                      <th className="py-3 px-6 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant text-right">SLA Date</th>
+                      <th className="py-3 px-6 text-[10px] uppercase font-bold tracking-widest text-on-surface-variant text-right">Actions</th>
+                   </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/5">
+                   {items.map(item => {
+                      const isOverdue = item.due_date && new Date(item.due_date) < new Date() && item.status !== 'resolved';
+                      return (
+                         <tr key={item.id} className="group hover:bg-surface-container-high transition-colors">
+                            <td className="py-4 px-6">
+                               <span className="text-xs font-bold text-on-surface block">{item.hostname}</span>
+                               <span className="text-[9px] uppercase tracking-widest text-on-surface-variant mt-0.5">{item.assignee_name || 'System Unassigned'}</span>
+                            </td>
+                            <td className="py-4 px-6">
+                               <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">{item.cve_id}</span>
+                            </td>
+                            <td className="py-4 px-6 text-center text-xs font-bold uppercase tracking-wider" style={{ color: sevColor(item.severity) }}>
+                               {item.severity}
+                            </td>
+                            <td className="py-4 px-6 text-center">
+                               <span className="text-xs font-mono font-black" style={{ color: item.cvss_score >= 9 ? '#ef4444' : item.cvss_score >= 7 ? '#f97316' : '#91aaeb' }}>
+                                  {item.cvss_score?.toFixed(1) || '—'}
+                               </span>
+                            </td>
+                            <td className="py-4 px-6">
+                               {item.status === 'open' ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] uppercase tracking-widest font-black bg-error/10 text-error border border-error/20">
+                                     <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span>
+                                     Open Alert
+                                  </span>
+                               ) : item.status === 'in_progress' ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] uppercase tracking-widest font-black bg-tertiary/10 text-tertiary border border-tertiary/20">
+                                     <span className="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+                                     In Progress
+                                  </span>
+                               ) : item.status === 'resolved' ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] uppercase tracking-widest font-black bg-success/10 text-success border border-success/20">
+                                     <span className="material-symbols-outlined text-[10px]">check</span>
+                                     Closed
+                                  </span>
+                               ) : item.status === 'accepted_risk' ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] uppercase tracking-widest font-black bg-[#91aaeb]/10 text-[#91aaeb] border border-[#91aaeb]/20">
+                                     Accepted Risk
+                                  </span>
+                               ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] uppercase tracking-widest font-black bg-surface-highest text-on-surface border border-outline-variant/30">
+                                     False Positive
+                                  </span>
+                               )}
+                            </td>
+                            <td className="py-4 px-6 text-right">
+                               <span className={`text-[10px] font-mono ${isOverdue ? 'text-error font-black animate-pulse' : 'text-on-surface-variant'}`}>{item.due_date ? new Date(item.due_date).toLocaleDateString() : '—'}</span>
+                               {isOverdue && <span className="text-[8px] uppercase tracking-widest text-[#d946ef] block mt-0.5">SLA Breached</span>}
+                            </td>
+                            <td className="py-4 px-6 text-right">
+                               <button className="bg-surface-container-highest border border-outline-variant/20 hover:bg-surface-bright text-on-surface px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all shadow-sm flex items-center gap-2 ml-auto" onClick={() => openEdit(item)}>
+                                  <span className="material-symbols-outlined text-[14px]">edit_note</span>
+                                  Update
+                               </button>
+                            </td>
+                         </tr>
+                      )
+                   })}
+                   {items.length === 0 && (
+                      <tr><td colSpan={7} className="py-16 text-center text-xs font-bold text-on-surface-variant tracking-widest uppercase opacity-50">Operational Ledger Empty</td></tr>
+                   )}
+                </tbody>
+             </table>
+         </div>
+      </div>
+
+      {/* Editor Modal Overlay */}
+      {editing && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setEditing(null)}>
+            <div className="bg-surface-container-low border border-outline-variant/20 shadow-2xl rounded-2xl w-full max-w-lg overflow-hidden glass-gradient" onClick={e => e.stopPropagation()}>
+               <div className="p-6 border-b border-outline-variant/10 bg-surface-container flex justify-between items-center relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-[#f97316]"></div>
+                  <div>
+                     <h3 className="text-lg font-bold tracking-tight text-on-surface">Update Mitigation State</h3>
+                     <p className="text-xs text-on-surface-variant font-mono mt-1">{editing.cve_id} // {editing.hostname}</p>
+                  </div>
+                  <button className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-error transition-colors" onClick={() => setEditing(null)}>
+                     <span className="material-symbols-outlined text-[16px]">close</span>
+                  </button>
+               </div>
+               
+               <div className="p-6 space-y-4">
+                  <div>
+                     <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block mb-2">Resolution Status</label>
+                     <select className="w-full bg-surface-container-high border-none rounded-xl text-sm text-on-surface py-3 px-4 focus:ring-1 focus:ring-primary shadow-inner" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
+                        {['open', 'in_progress', 'resolved', 'accepted_risk', 'false_positive'].map(s => <option key={s} value={s}>{s.replace('_', ' ').toUpperCase()}</option>)}
+                     </select>
+                  </div>
+
+                  <div>
+                     <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block mb-2">Target SLA Date</label>
+                     <input type="date" className="w-full bg-surface-container-high border-none rounded-xl text-sm text-on-surface py-3 px-4 focus:ring-1 focus:ring-primary shadow-inner" value={editForm.due_date} onChange={e => setEditForm(f => ({ ...f, due_date: e.target.value }))} />
+                  </div>
+
+                  <div>
+                     <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block mb-2">Analyst Remarks</label>
+                     <textarea className="w-full bg-surface-container-high border-none rounded-xl text-sm text-on-surface p-4 focus:ring-1 focus:ring-primary shadow-inner resize-none h-24" placeholder="Enter findings, PR links, or mitigation justifications..." value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}></textarea>
+                  </div>
+
+                  <div className="pt-4 border-t border-outline-variant/10 flex gap-3">
+                     <button className="flex-1 bg-primary text-[#001d36] px-6 py-3 rounded-xl text-sm font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-[0_0_15px_rgba(123,208,255,0.3)] disabled:opacity-50" onClick={saveEdit}>
+                        Commit Record
+                     </button>
+                     <button className="px-6 py-3 rounded-xl bg-surface-container hover:bg-surface-highest text-sm font-bold text-on-surface-variant transition-colors border border-outline-variant/20" onClick={() => setEditing(null)}>
+                        Discard
+                     </button>
+                  </div>
+               </div>
+            </div>
+         </div>
+      )}
+
+    </div>
+  );
+}

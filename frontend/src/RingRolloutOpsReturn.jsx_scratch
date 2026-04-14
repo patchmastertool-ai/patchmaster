@@ -1,0 +1,363 @@
+  return (
+    <div className="max-w-[1600px] mx-auto space-y-8 animate-fade-in pb-12">
+      {/* Header Profile */}
+      <section className="mb-0 p-8 rounded-2xl bg-surface-container-low border border-outline-variant/10 shadow-xl relative overflow-hidden group">
+        <div className="absolute top-0 left-0 w-1 h-full bg-success"></div>
+        <div className="absolute top-[-20%] right-[-5%] w-[40%] h-[150%] blur-3xl pointer-events-none transition-all duration-1000 bg-gradient-to-l from-success/10 to-transparent"></div>
+        <div className="relative z-10 flex flex-col items-start gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-on-surface-variant flex items-center">
+                 <span className="material-symbols-outlined text-[12px] mr-1">donut_large</span>
+                 Staged Deployment
+              </span>
+            </div>
+            <h2 className="text-3xl font-bold tracking-tighter text-on-surface flex items-center gap-3">
+              <span className="material-symbols-outlined text-3xl text-success">trip_origin</span>
+              Ring Rollout Engine
+            </h2>
+            <p className="text-on-surface-variant mt-2 max-w-2xl text-sm">
+              Define phased rollout pipelines (canary, pilot, broad) with automated guardrails. Monitor deployment velocity and enforce safety gates before promoting updates to subsequent rings.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Main Grid Container */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+        
+        {/* Left Column (Forms) */}
+        <div className="xl:col-span-5 space-y-8 flex flex-col">
+           
+           {/* Create Policy Widget */}
+           <div className="bg-surface-container border border-outline-variant/10 shadow-xl rounded-2xl p-6 relative overflow-hidden glass-gradient">
+              <div className="absolute top-0 left-0 w-full h-1 bg-success"></div>
+              <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-on-surface-variant flex items-center mb-6">
+                 <span className="material-symbols-outlined text-[16px] mr-2 text-success">add_circle</span>
+                 Architect Rollout Sequence
+              </h3>
+
+              <div className="space-y-4">
+                 <input className="w-full bg-surface-container-high border-none rounded-xl text-sm text-on-surface py-2.5 px-4 focus:ring-1 focus:ring-success shadow-inner" placeholder="Policy Designation (e.g. Core Infra Rings)" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+                 
+                 <div className="grid grid-cols-2 gap-4">
+                    <input className="w-full bg-surface-container-high border-none rounded-xl text-xs text-on-surface py-2.5 px-4 focus:ring-1 focus:ring-success shadow-inner" placeholder="Description/Note" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+                    <select className="w-full bg-surface-container-high border-none rounded-xl text-xs text-on-surface py-2.5 px-4 focus:ring-1 focus:ring-success shadow-inner" value={form.target_os_family} onChange={(e) => setForm((f) => ({ ...f, target_os_family: e.target.value }))}>
+                       <option value="linux">Target: Linux</option>
+                       <option value="windows">Target: Windows</option>
+                       <option value="any">Target: Any Platform</option>
+                    </select>
+                 </div>
+
+                 <div>
+                    <label className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant block mb-1">Rings Schema (JSON)</label>
+                    <textarea className="w-full bg-[#050b14] border border-outline-variant/20 rounded-xl p-3 h-28 font-mono text-[11px] text-success/90 focus:ring-1 focus:ring-success outline-none resize-none leading-relaxed" spellCheck="false" value={form.ringsText} onChange={(e) => setForm((f) => ({ ...f, ringsText: e.target.value }))} />
+                 </div>
+
+                 <div>
+                    <label className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant block mb-1">Safety Guardrails (JSON)</label>
+                    <textarea className="w-full bg-[#050b14] border border-outline-variant/20 rounded-xl p-3 h-28 font-mono text-[11px] text-tertiary/90 focus:ring-1 focus:ring-success outline-none resize-none leading-relaxed" spellCheck="false" value={form.guardrailsText} onChange={(e) => setForm((f) => ({ ...f, guardrailsText: e.target.value }))} />
+                    <p className="text-[9px] text-on-surface-variant mt-1.5 opacity-75">Config support: maintenance.require_window, health(min_compliance_score, max_cve_count), rollback.max_failed_percent</p>
+                 </div>
+
+                 <div>
+                    <label className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant block mb-1">Rollout Advanced Config (JSON)</label>
+                    <textarea className="w-full bg-[#050b14] border border-outline-variant/20 rounded-xl p-3 h-12 font-mono text-[11px] text-secondary-dim focus:ring-1 focus:ring-success outline-none resize-none leading-relaxed" spellCheck="false" value={form.rolloutConfigText} onChange={(e) => setForm((f) => ({ ...f, rolloutConfigText: e.target.value }))} />
+                 </div>
+
+                 <div className="flex items-center justify-between pt-2 border-t border-outline-variant/10">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                       <input type="checkbox" className="rounded bg-surface-container-highest border-outline text-success focus:ring-1 focus:ring-success h-4 w-4" checked={form.is_enabled} onChange={(e) => setForm((f) => ({ ...f, is_enabled: e.target.checked }))} />
+                       <span className="text-xs font-bold text-on-surface uppercase tracking-wider">Enable Policy</span>
+                    </label>
+                    <button className="bg-success text-[#052e16] px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-[0_0_15px_rgba(34,197,94,0.3)] disabled:opacity-50" onClick={createPolicy} disabled={loading || actionLoading}>
+                       Mint Policy
+                    </button>
+                 </div>
+              </div>
+           </div>
+
+           {/* Launch Rollout Widget */}
+           <div className="bg-surface-container border border-outline-variant/10 shadow-xl rounded-2xl p-6 relative overflow-hidden glass-gradient">
+              <div className="absolute top-0 left-0 w-full h-1 bg-primary"></div>
+              <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-on-surface-variant flex items-center justify-between mb-4">
+                 <div className="flex items-center">
+                    <span className="material-symbols-outlined text-[16px] mr-2 text-primary">rocket_launch</span>
+                    Ignite Active Policy
+                 </div>
+                 {selectedPolicy && <span className="bg-primary/20 text-primary border border-primary/30 px-2 py-0.5 rounded text-[8px] font-black tracking-widest truncate max-w-[150px]">{selectedPolicy.name}</span>}
+              </h3>
+
+              <div className="space-y-4">
+                 <div>
+                    <label className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant block mb-1">Execution Vector</label>
+                    <select className="w-full bg-surface-container-high border-none rounded-xl text-xs text-on-surface py-2.5 px-4 focus:ring-1 focus:ring-primary shadow-inner" value={launchForm.action} onChange={(e) => setLaunchForm((f) => ({ ...f, action: e.target.value }))}>
+                       <option value="upgrade">upgrade module</option>
+                       <option value="install">install module</option>
+                       <option value="rollback">rollback module</option>
+                    </select>
+                 </div>
+                 
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                       <label className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant block mb-1">Target Binaries</label>
+                       <textarea className="w-full bg-[#050b14] border border-outline-variant/20 rounded-xl p-2.5 h-16 font-mono text-[10px] text-primary focus:ring-1 focus:ring-primary outline-none resize-none leading-relaxed" placeholder="['nginx']" value={launchForm.packagesText} onChange={(e) => setLaunchForm((f) => ({ ...f, packagesText: e.target.value }))} />
+                    </div>
+                    <div>
+                       <label className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant block mb-1">Held Binaries</label>
+                       <textarea className="w-full bg-[#050b14] border border-outline-variant/20 rounded-xl p-2.5 h-16 font-mono text-[10px] text-warning focus:ring-1 focus:ring-primary outline-none resize-none leading-relaxed" placeholder="['docker']" value={launchForm.holdPackagesText} onChange={(e) => setLaunchForm((f) => ({ ...f, holdPackagesText: e.target.value }))} />
+                    </div>
+                 </div>
+
+                 <div className="flex items-center justify-between pt-2 border-t border-outline-variant/10">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                       <input type="checkbox" className="rounded bg-surface-container-highest border-outline text-primary focus:ring-1 focus:ring-primary h-4 w-4" checked={launchForm.dry_run} onChange={(e) => setLaunchForm((f) => ({ ...f, dry_run: e.target.checked }))} />
+                       <span className={`text-xs font-bold uppercase tracking-wider ${launchForm.dry_run ? 'text-primary' : 'text-on-surface'}`}>Simulation Mode</span>
+                    </label>
+                    <button className="bg-primary text-[#001d36] px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-[0_0_15px_rgba(123,208,255,0.3)] disabled:opacity-50" onClick={launchPolicy} disabled={loading || actionLoading || !selectedPolicyId}>
+                       Queue Sequence
+                    </button>
+                 </div>
+              </div>
+           </div>
+
+        </div>
+
+        {/* Right Column (Dashboards & Ledgers) */}
+        <div className="xl:col-span-7 flex flex-col gap-8 min-h-0">
+           
+           {/* Notifications */}
+           {(error || message) && (
+              <div className={`p-4 rounded-xl border flex items-start gap-3 backdrop-blur-md ${error ? 'bg-error/10 border-error/30 text-error' : 'bg-primary/10 border-primary/30 text-primary'}`}>
+                 <span className="material-symbols-outlined text-[20px]">{error ? 'error' : 'info'}</span>
+                 <p className="text-sm font-mono max-h-24 overflow-y-auto w-full whitespace-pre-wrap">{error || message}</p>
+                 <button onClick={() => {setError(''); setMessage('');}} className="opacity-50 hover:opacity-100"><span className="material-symbols-outlined text-sm">close</span></button>
+              </div>
+           )}
+
+           {/* Policies Directory */}
+           <div className="bg-surface-container rounded-2xl border border-outline-variant/10 shadow-2xl overflow-hidden glass-gradient">
+               <div className="px-6 py-4 border-b border-outline-variant/10 bg-surface-container-low flex items-center justify-between shrink-0">
+                  <h3 className="text-xs font-bold text-on-surface flex items-center gap-2 uppercase tracking-widest">
+                     <span className="material-symbols-outlined text-sm text-secondary">collections_bookmark</span>
+                     Declared Runbooks
+                  </h3>
+                  <button className="text-[10px] font-bold text-primary uppercase tracking-widest hover:underline disabled:opacity-50 flex items-center gap-1" onClick={loadPolicies} disabled={loading || actionLoading}>
+                     <span className="material-symbols-outlined text-[14px]">sync</span>
+                     Resync
+                  </button>
+               </div>
+               <div className="overflow-x-auto max-h-[220px]">
+                  <table className="w-full text-left">
+                     <thead className="border-b border-outline-variant/20 sticky top-0 bg-surface-container z-10">
+                        <tr>
+                           <th className="py-2.5 px-4 text-[9px] uppercase font-black tracking-widest text-on-surface-variant">Selected</th>
+                           <th className="py-2.5 px-4 text-[9px] uppercase font-black tracking-widest text-on-surface-variant">Runbook Ref</th>
+                           <th className="py-2.5 px-4 text-[9px] uppercase font-black tracking-widest text-on-surface-variant">Arch Target</th>
+                           <th className="py-2.5 px-4 text-[9px] uppercase font-black tracking-widest text-on-surface-variant">Phases</th>
+                           <th className="py-2.5 px-4 text-[9px] uppercase font-black tracking-widest text-on-surface-variant text-right">Operations</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-outline-variant/5">
+                        {policies.map((policy) => {
+                           const isSel = selectedPolicyId === policy.id;
+                           return (
+                              <tr key={policy.id} className={`group cursor-pointer transition-colors ${isSel ? 'bg-primary/5' : 'hover:bg-surface-container-high'} ${!policy.is_enabled ? 'opacity-50 grayscale' : ''}`} onClick={() => setSelectedPolicyId(policy.id)}>
+                                 <td className="py-3 px-4 text-center">
+                                    <div className={`w-3 h-3 rounded-full border-2 mx-auto ${isSel ? 'border-primary bg-primary' : 'border-outline-variant'}`}></div>
+                                 </td>
+                                 <td className="py-3 px-4">
+                                    <span className={`text-xs font-bold block ${isSel ? 'text-primary' : 'text-on-surface'}`}>{policy.name}</span>
+                                    <span className="text-[9px] uppercase tracking-widest text-on-surface-variant mt-0.5 inline-flex items-center gap-1">
+                                       <span className={`w-1.5 h-1.5 rounded-full ${policy.is_enabled ? 'bg-success' : 'bg-surface-highest'}`}></span>
+                                       {policy.is_enabled ? 'armed' : 'disarmed'}
+                                    </span>
+                                 </td>
+                                 <td className="py-3 px-4 text-xs font-mono text-secondary-dim">{policy.target_os_family}</td>
+                                 <td className="py-3 px-4 text-xs font-mono ext-on-surface">{Array.isArray(policy.rings) ? policy.rings.length : 0} rings</td>
+                                 <td className="py-3 px-4 text-right">
+                                    <button className="bg-surface-container-highest border border-outline-variant/20 hover:bg-surface-bright text-on-surface px-3 py-1 rounded text-[10px] font-bold uppercase transition-all shadow-sm disabled:opacity-50" onClick={(e) => { e.stopPropagation(); togglePolicy(policy); }} disabled={actionLoading}>
+                                       {policy.is_enabled ? 'Disarm' : 'Arm Node'}
+                                    </button>
+                                 </td>
+                              </tr>
+                           )
+                        })}
+                        {!policies.length && (
+                           <tr><td colSpan={5} className="py-6 text-center text-xs font-bold text-on-surface-variant tracking-widest uppercase opacity-50">Zero Policies Discovered</td></tr>
+                        )}
+                     </tbody>
+                  </table>
+               </div>
+           </div>
+
+           {/* Execution Pipeline (Runs) */}
+           <div className="bg-surface-container rounded-2xl border border-outline-variant/10 shadow-2xl overflow-hidden glass-gradient flex flex-col min-h-[300px]">
+               <div className="px-6 py-4 border-b border-outline-variant/10 bg-surface-container-low flex items-center justify-between shrink-0">
+                  <h3 className="text-xs font-bold text-on-surface flex items-center gap-2 uppercase tracking-widest">
+                     <span className="material-symbols-outlined text-sm text-tertiary">polyline</span>
+                     Deployment Threads
+                     {selectedPolicy && <span className="opacity-50 text-[10px] ml-1">({selectedPolicy.name})</span>}
+                  </h3>
+                  <button className="text-[10px] font-bold text-primary uppercase tracking-widest hover:underline disabled:opacity-50 flex items-center gap-1" onClick={loadRuns} disabled={actionLoading || !selectedPolicyId}>
+                     <span className="material-symbols-outlined text-[14px]">sync</span>
+                  </button>
+               </div>
+               <div className="overflow-x-auto flex-1">
+                  <table className="w-full text-left relative">
+                     <thead className="border-b border-outline-variant/20 sticky top-0 bg-surface-container z-10">
+                        <tr>
+                           <th className="py-2.5 px-4 text-[9px] uppercase font-black tracking-widest text-on-surface-variant text-center">Trap</th>
+                           <th className="py-2.5 px-4 text-[9px] uppercase font-black tracking-widest text-on-surface-variant">S/Req ID</th>
+                           <th className="py-2.5 px-4 text-[9px] uppercase font-black tracking-widest text-on-surface-variant">Lifecycle State</th>
+                           <th className="py-2.5 px-4 text-[9px] uppercase font-black tracking-widest text-on-surface-variant">Mode / Sim</th>
+                           <th className="py-2.5 px-4 text-[9px] uppercase font-black tracking-widest text-on-surface-variant">Job ID</th>
+                           <th className="py-2.5 px-4 text-[9px] uppercase font-black tracking-widest text-on-surface-variant">Timeline</th>
+                           <th className="py-2.5 px-4 text-[9px] uppercase font-black tracking-widest text-on-surface-variant text-right">Approval Gates</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-outline-variant/5">
+                        {runs.map((run) => {
+                           const isSel = selectedRunId === run.id;
+                           const s = String(run.status || '').toLowerCase();
+                           const sColor = s === 'success' || s === 'completed' ? 'success' : s === 'failed' ? 'error' : s === 'running' ? 'tertiary' : 'on-surface-variant';
+                           const isPendingApp = run?.summary?.awaiting_approval;
+
+                           return (
+                              <tr key={run.id} className={`group cursor-pointer transition-colors ${isSel ? 'bg-primary/5' : 'hover:bg-surface-container-high'}`} onClick={() => setSelectedRunId(run.id)}>
+                                 <td className="py-3 px-4 text-center border-l-2" style={{ borderLeftColor: isSel ? '#7bd0ff' : 'transparent' }}>
+                                    <div className={`w-2 h-2 rounded-full mx-auto bg-${sColor} ${s === 'running' ? 'animate-pulse' : ''}`}></div>
+                                 </td>
+                                 <td className="py-3 px-4 text-xs font-mono text-on-surface">{run.id}</td>
+                                 <td className="py-3 px-4">
+                                    <span className={`px-2 py-0.5 rounded text-[9px] uppercase tracking-widest font-black border bg-${sColor}/10 border-${sColor}/20 text-${sColor} whitespace-nowrap`}>
+                                       {run.status}
+                                    </span>
+                                 </td>
+                                 <td className="py-3 px-4">
+                                    <span className="text-xs font-mono text-secondary-dim block">{run.action}</span>
+                                    <span className="text-[9px] uppercase tracking-widest font-bold mt-0.5 block">{run.dry_run ? <span className="text-warning">SIMULATION</span> : <span className="text-primary">LIVE FIRE</span>}</span>
+                                 </td>
+                                 <td className="py-3 px-4 text-xs font-mono text-outline-variant">{run.queue_job_id || 'n/a'}</td>
+                                 <td className="py-3 px-4 text-[9px] font-mono text-secondary-dim">{run.created_at ? new Date(run.created_at).toLocaleString() : '-'}</td>
+                                 <td className="py-3 px-4 text-right">
+                                    {isPendingApp ? (
+                                       <div className="flex items-center justify-end gap-2">
+                                          <button className="bg-success/20 text-success hover:bg-success hover:text-[#052e16] px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors" onClick={(e) => { e.stopPropagation(); decideApproval(run, 'approve'); }} disabled={actionLoading}>AUTH</button>
+                                          <button className="bg-error/20 text-error hover:bg-error hover:text-white px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors" onClick={(e) => { e.stopPropagation(); decideApproval(run, 'reject'); }} disabled={actionLoading}>DENY</button>
+                                       </div>
+                                    ) : (
+                                       <span className="text-outline-variant text-[10px] italic">No gates</span>
+                                    )}
+                                 </td>
+                              </tr>
+                           )
+                        })}
+                        {!runs.length && (
+                           <tr><td colSpan={7} className="py-6 text-center text-xs font-bold text-on-surface-variant tracking-widest uppercase opacity-50">Empty ledger structure</td></tr>
+                        )}
+                     </tbody>
+                  </table>
+               </div>
+           </div>
+
+           {/* Double Grid for Gates and Audits */}
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+              
+              {/* Gate Decision Log */}
+              <div className="bg-surface-container rounded-2xl border border-outline-variant/10 shadow-xl overflow-hidden glass-gradient">
+                 <div className="px-5 py-3 border-b border-outline-variant/10 bg-surface-container-low">
+                    <h3 className="text-[10px] font-bold text-on-surface flex items-center gap-2 uppercase tracking-widest">
+                       <span className="material-symbols-outlined text-[14px] text-warning">gavel</span>
+                       Gate Analysis {selectedRun ? `— [RUN ${selectedRun.id}]` : ''}
+                    </h3>
+                 </div>
+                 
+                 <div className="p-3 border-b border-outline-variant/5 bg-surface-container-highest/20">
+                    <input className="w-full bg-surface-container border border-outline-variant/10 rounded-lg text-[10px] text-on-surface py-2 px-3 focus:ring-1 focus:ring-primary shadow-inner font-mono" placeholder="Attach operator approval note here..." value={approvalNote} onChange={(e) => setApprovalNote(e.target.value)} />
+                 </div>
+
+                 <div className="overflow-x-auto max-h-[250px]">
+                    <table className="w-full text-left">
+                       <thead className="bg-[#050b14] sticky top-0 border-b border-outline-variant/10">
+                          <tr>
+                             <th className="py-2 px-3 text-[8px] uppercase tracking-widest font-bold text-on-surface-variant">Ring</th>
+                             <th className="py-2 px-3 text-[8px] uppercase tracking-widest font-bold text-on-surface-variant">Gate/Resolution</th>
+                             <th className="py-2 px-3 text-[8px] uppercase tracking-widest font-bold text-on-surface-variant text-right">Details</th>
+                          </tr>
+                       </thead>
+                       <tbody className="divide-y divide-outline-variant/5">
+                          {(selectedRun?.summary?.gate_decisions || []).map((item, idx) => (
+                             <tr key={`gate-${idx}`} className="hover:bg-surface-container-high transition-colors">
+                                <td className="py-2 px-3 text-[10px] font-bold">{item.ring_name || item.ring_index}</td>
+                                <td className="py-2 px-3">
+                                   <span className="text-[9px] font-mono text-on-surface block">{item.gate || 'UNKNOWN'}</span>
+                                   <span className={`text-[9px] font-bold uppercase tracking-widest ${item.decision === 'approve' ? 'text-success' : item.decision === 'reject' ? 'text-error' : 'text-tertiary'}`}>{item.decision || '-'}</span>
+                                </td>
+                                <td className="py-2 px-3 text-right">
+                                   <div className="max-h-12 overflow-y-auto font-mono text-[9px] text-secondary-dim text-left inline-block max-w-[120px] bg-[#050b14] p-1 rounded">
+                                      {JSON.stringify(item.state || item.health_block_reasons || {})}
+                                   </div>
+                                </td>
+                             </tr>
+                          ))}
+                          {!selectedRun?.summary?.gate_decisions?.length && (
+                             <tr><td colSpan={3} className="py-4 text-center text-[10px] font-bold text-on-surface-variant tracking-widest uppercase opacity-40">No gate resolutions</td></tr>
+                          )}
+                       </tbody>
+                    </table>
+                 </div>
+              </div>
+
+              {/* Policy Audit Trail */}
+              <div className="bg-surface-container rounded-2xl border border-outline-variant/10 shadow-xl overflow-hidden glass-gradient">
+                 <div className="px-5 py-3 border-b border-outline-variant/10 bg-surface-container-low flex justify-between items-center">
+                    <h3 className="text-[10px] font-bold text-on-surface flex items-center gap-2 uppercase tracking-widest">
+                       <span className="material-symbols-outlined text-[14px] text-error">assignment_return</span>
+                       Immutable Audit Log
+                    </h3>
+                    <button className="text-[10px] font-bold text-primary uppercase tracking-widest hover:underline disabled:opacity-50 flex items-center gap-1" onClick={loadAudit} disabled={!selectedPolicyId || actionLoading}>
+                       <span className="material-symbols-outlined text-[12px]">refresh</span>
+                    </button>
+                 </div>
+                 
+                 <div className="overflow-x-auto max-h-[300px]">
+                    <table className="w-full text-left">
+                       <thead className="bg-[#050b14] sticky top-0 border-b border-outline-variant/10 z-10">
+                          <tr>
+                             <th className="py-2 px-3 text-[8px] uppercase tracking-widest font-bold text-on-surface-variant">Timestamp / TGT</th>
+                             <th className="py-2 px-3 text-[8px] uppercase tracking-widest font-bold text-on-surface-variant">Event Source</th>
+                             <th className="py-2 px-3 text-[8px] uppercase tracking-widest font-bold text-on-surface-variant text-right">Event Hash</th>
+                          </tr>
+                       </thead>
+                       <tbody className="divide-y divide-outline-variant/5">
+                          {auditLogs.map((item) => (
+                             <tr key={`audit-${item.id}`} className="hover:bg-surface-container-high transition-colors">
+                                <td className="py-2 px-3">
+                                   <span className="text-[9px] font-mono text-secondary-dim block">{item.created_at ? new Date(item.created_at).toLocaleString() : '-'}</span>
+                                   <span className="text-[9px] font-mono text-outline-variant break-all">{item.target_type}:{item.target_id}</span>
+                                </td>
+                                <td className="py-2 px-3 text-[10px] font-bold text-on-surface">{item.action}</td>
+                                <td className="py-2 px-3 text-right">
+                                   <div className="max-h-12 overflow-y-auto font-mono text-[9px] text-[#0ea5e9] text-left inline-block max-w-[120px] bg-[#050b14] p-1 rounded border border-[#0ea5e9]/20">
+                                      {JSON.stringify(item.details || {})}
+                                   </div>
+                                </td>
+                             </tr>
+                          ))}
+                          {!auditLogs.length && (
+                             <tr><td colSpan={3} className="py-4 text-center text-[10px] font-bold text-on-surface-variant tracking-widest uppercase opacity-40">Audit chain empty</td></tr>
+                          )}
+                       </tbody>
+                    </table>
+                 </div>
+              </div>
+
+           </div>
+
+        </div>
+
+      </div>
+    </div>
+  );
+}
