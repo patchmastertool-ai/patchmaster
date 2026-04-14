@@ -1,6 +1,7 @@
 """ServiceNow integration - create and manage incidents via ServiceNow REST API."""
 
 import logging
+import os
 import json
 from typing import Optional, Dict, Any, List
 from datetime import datetime
@@ -60,10 +61,15 @@ class ServiceNowIntegration:
         """
         self.instance_url = instance_url.rstrip("/")
         self.username = username
-        self.password = password
+        self._password = password  # Store internal, access via property
         self.table = table
         self.verify_ssl = verify_ssl
         self._session = None
+
+    @property
+    def password(self) -> str:
+        """Get password from environment or internal storage."""
+        return os.getenv("SERVICENOW_PASSWORD", "") or self._password
 
     def _get_auth(self) -> tuple[str, str]:
         """Get authentication tuple."""
