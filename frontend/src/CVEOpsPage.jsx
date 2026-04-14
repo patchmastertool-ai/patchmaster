@@ -22,14 +22,40 @@ function useDebounce(value, delay) {
   return debouncedValue;
 }
 
+// Local storage persistence hook for filter state (UI-009: Filter Persistence)
+function useFilterPersistence(key) {
+  const [savedFilters, setSavedFilters] = useState({});
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`pm-filters-${key}`);
+      if (saved) {
+        setSavedFilters(JSON.parse(saved));
+      }
+    } catch {}
+  }, [key]);
+
+  const saveFilters = useCallback((filters) => {
+    try {
+      localStorage.setItem(`pm-filters-${key}`, JSON.stringify(filters));
+    } catch {}
+  }, [key]);
+
+  return [savedFilters, saveFilters];
+}
+
 export default function CVEOpsPage({ API, apiFetch, hasRole, getToken, AppIcon }) {
   const [cves, setCves] = useState([]);
   const [stats, setStats] = useState(null);
-  const [search, setSearch] = useState('');
+  
+  // Persist filters to localStorage (UI-009)
+  const [persistedFilters, setPersistedFilters] = useFilterPersistence('cve');
+  
+  const [search, setSearch] = useState(persistedFilters.search || '');
   // Debounce search input by 300ms to avoid excessive API calls
   const debouncedSearch = useDebounce(search, 300);
-  const [severity, setSeverity] = useState('');
-  const [onlyWithHosts, setOnlyWithHosts] = useState(false);
+  const [severity, setSeverity] = useState(persistedFilters.severity || '');
+  const [onlyWithHosts, setOnlyWithHosts] = useState(persistedFilters.onlyWithHosts || false);
   const [form, setForm] = useState({ cve_id: '', description: '', severity: 'medium', cvss_score: '', affected_packages: '', advisory_url: '' });
   const [toast, setToast] = useState(null);
   const [nvdDays, setNvdDays] = useState(2);
@@ -80,6 +106,24 @@ export default function CVEOpsPage({ API, apiFetch, hasRole, getToken, AppIcon }
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Persist filters to localStorage when they change (UI-009: Filter Persistence)
+  useEffect(() => {
+    setPersistedFilters({ search: debouncedSearch, severity, onlyWithHosts });
+  }, [debouncedSearch, severity, onlyWithHosts, setPersistedFilters]);
+
+  // Keyboard navigation support (UI-014: Keyboard Nav)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl/Cmd + F focuses search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        document.querySelector('.search-input')?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const showToast = (text, type = 'info') => {
     setToast({ text, type });
@@ -407,7 +451,7 @@ export default function CVEOpsPage({ API, apiFetch, hasRole, getToken, AppIcon }
           </div>
         </div>
         <div className="ops-table-toolbar">
-          <div className="ops-pills">
+          <div className="ops-pills" role="group" aria-label="Filter by severity">
             {[
               { key: '', label: 'All severities' },
               { key: 'critical', label: 'Critical' },
@@ -415,11 +459,16 @@ export default function CVEOpsPage({ API, apiFetch, hasRole, getToken, AppIcon }
               { key: 'medium', label: 'Medium' },
               { key: 'low', label: 'Low' },
             ].map(filter => (
-              <button key={filter.label} className={`ops-pill ${severity === filter.key ? 'active' : ''}`} onClick={() => setSeverity(filter.key)}>{filter.label}</button>
+              <button 
+                key={filter.label} 
+                className={`ops-pill ${severity === filter.key ? 'active' : ''}`} 
+                onClick={() => setSeverity(filter.key)}
+                aria-pressed={severity === filter.key}
+              >{filter.label}</button>
             ))}
           </div>
           <div className="form-row">
-            <input className="input search-input" placeholder="Search CVE ID or description" value={search} onChange={e => setSearch(e.target.value)} />
+            <input className="input search-input" placeholder="Search CVE ID or description" value={search} onChange={e => setSearch(e.target.value)} aria-label="Search CVEs by ID or description" />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#64748b' }}>
               <input type="checkbox" checked={onlyWithHosts} onChange={e => setOnlyWithHosts(e.target.checked)} />
               Host-linked only
@@ -432,23 +481,23 @@ export default function CVEOpsPage({ API, apiFetch, hasRole, getToken, AppIcon }
         ) : (
           <>
             <div className="table-wrap">
-              <table className="table ops-table">
+              <table className="table ops-table" role="table" aria-label="CVE inventory">
                 <thead>
-                  <tr>
-                    <th>CVE ID</th>
-                    <th>Severity</th>
-                    <th>CVSS</th>
-                    <th>Affected Hosts</th>
-                    <th>Patched Hosts</th>
-                    <th>Description</th>
-                    <th>Actions</th>
+                  <tr role="row">
+                    <th role="columnheader">CVE ID</th>
+                    <th role="columnheader">Severity</th>
+                    <th role="columnheader">CVSS</th>
+                    <th role="columnheader">Affected Hosts</th>
+                    <th role="columnheader">Patched Hosts</th>
+                    <th role="columnheader">Description</th>
+                    <th role="columnheader">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {safeCves.map(cve => (
-                    <tr key={cve.id}>
+                    <tr key={cve.id} role="row">
                       <td>
-                        <button className="link-btn" onClick={() => openDetail(cve.cve_id)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontWeight: 700 }}>{cve.cve_id}</button>
+                        <button className="link-btn" onClick={() => openDetail(cve.cve_id)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontWeight: 700 }} aria-label={`View details for ${cve.cve_id}`}>{cve.cve_id}</button>
                         <span className="ops-table-meta">{Number(cve.affected_hosts || 0) > 0 ? 'Linked to hosts' : 'Not yet linked to hosts'}</span>
                       </td>
                       <td><span className={`badge badge-${cve.severity === 'critical' ? 'danger' : cve.severity === 'high' ? 'warning' : cve.severity === 'medium' ? 'info' : 'success'}`}>{cve.severity}</span></td>
@@ -456,7 +505,7 @@ export default function CVEOpsPage({ API, apiFetch, hasRole, getToken, AppIcon }
                       <td>{cve.affected_hosts}</td>
                       <td>{cve.patched_hosts}</td>
                       <td style={{ maxWidth: 320 }}>{cve.description || 'No description provided.'}</td>
-                      <td>{hasRole('admin') && <button className="btn btn-sm btn-danger" onClick={() => del(cve.id)}>Delete</button>}</td>
+                      <td>{hasRole('admin') && <button className="btn btn-sm btn-danger" onClick={() => del(cve.id)} aria-label={`Delete ${cve.cve_id}`}>Delete</button>}</td>
                     </tr>
                   ))}
                 </tbody>

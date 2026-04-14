@@ -22,15 +22,40 @@ function useDebounce(value, delay) {
   return debouncedValue;
 }
 
+// Local storage persistence hook for filter state (UI-009: Filter Persistence)
+function useFilterPersistence(key) {
+  const [savedFilters, setSavedFilters] = useState({});
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`pm-filters-${key}`);
+      if (saved) {
+        setSavedFilters(JSON.parse(saved));
+      }
+    } catch {}
+  }, [key]);
+
+  const saveFilters = useCallback((filters) => {
+    try {
+      localStorage.setItem(`pm-filters-${key}`, JSON.stringify(filters));
+    } catch {}
+  }, [key]);
+
+  return [savedFilters, saveFilters];
+}
+
 export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, AppIcon, useInterval }) {
   // Defensive check: ensure hosts is always an array
   const safeHosts = Array.isArray(hosts) ? hosts : [];
   
-  const [search, setSearch] = useState('');
+  // Persist filters to localStorage (UI-009)
+  const [persistedFilters, setPersistedFilters] = useFilterPersistence('hosts');
+  
+  const [search, setSearch] = useState(persistedFilters.search || '');
   // Debounce search input by 300ms to avoid re-filtering on every keystroke
   const debouncedSearch = useDebounce(search, 300);
-  const [osFilter, setOsFilter] = useState('all');
-  const [siteFilter, setSiteFilter] = useState('all');
+  const [osFilter, setOsFilter] = useState(persistedFilters.os || 'all');
+  const [siteFilter, setSiteFilter] = useState(persistedFilters.site || 'all');
   const [agentStatus, setAgentStatus] = useState({});
   const [tagModalHost, setTagModalHost] = useState(null);
   const [newTag, setNewTag] = useState('');
@@ -40,6 +65,7 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
   const [bulkValue, setBulkValue] = useState('');
   const [detailHost, setDetailHost] = useState(null);
   const [detailData, setDetailData] = useState(null);
+  const [tooltipTarget, setTooltipTarget] = useState(null);
 
   const refreshHosts = useCallback(() => {
     apiFetch(`${API}/api/hosts/`).then(r => r.json()).then(setHosts).catch(() => {});
@@ -291,6 +317,41 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
     });
   }, [safeHosts, debouncedSearch, osFilter, siteFilter]);
 
+  // Persist filters to localStorage when they change (UI-009: Filter Persistence)
+  useEffect(() => {
+    setPersistedFilters({ search: debouncedSearch, os: osFilter, site: siteFilter });
+  }, [debouncedSearch, osFilter, siteFilter, setPersistedFilters]);
+
+  // Keyboard navigation support (UI-014: Keyboard Nav)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Escape closes modals
+      if (e.key === 'Escape') {
+        if (detailHost) setDetailHost(null);
+        if (tagModalHost) setTagModalHost(null);
+        setTooltipTarget(null);
+      }
+      // Ctrl/Cmd + F focuses search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        document.querySelector('.search-input')?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [detailHost, tagModalHost]);
+
+  // Tooltip handler (UI-015: Tooltips via mouse enter/leave)
+  const showTooltip = (e, message) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTooltipTarget({
+      message,
+      x: rect.left + rect.width / 2,
+      y: rect.top - 8,
+    });
+  };
+  const hideTooltip = () => setTooltipTarget(null);
+
   const statusForHost = (host) => agentStatus[host.ip] || {};
   const isHostOnline = (host) => !!host.is_online;
   const needsReboot = (host) => {
@@ -472,19 +533,26 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
             <p className="ops-subtle">Track reachability, patch posture, reboot backlog, and operational tags from one place.</p>
           </div>
           <div className="ops-actions">
-            <button className="btn btn-sm" onClick={refreshHosts}>Refresh</button>
-            <button className="btn btn-sm btn-secondary" onClick={exportCSV}>Export CSV</button>
-            <button className="btn btn-sm" onClick={selectAll} disabled={!filtered.length}>Select View</button>
+            <button className="btn btn-sm" onClick={refreshHosts} aria-label="Refresh host list">Refresh</button>
+            <button className="btn btn-sm btn-secondary" onClick={exportCSV} aria-label="Export hosts to CSV">Export CSV</button>
+            <button className="btn btn-sm" onClick={selectAll} disabled={!filtered.length} aria-label="Select all visible hosts">Select View</button>
           </div>
         </div>
 
         <div className="ops-table-toolbar">
-          <input className="input search-input" placeholder="Search by host, IP, site, OS, group, or tag" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: '1 1 260px' }} />
-          <select className="input" value={siteFilter} onChange={e => setSiteFilter(e.target.value)} style={{ maxWidth: 220 }}>
+          <input 
+            className="input search-input" 
+            placeholder="Search by host, IP, site, OS, group, or tag" 
+            value={search} 
+            onChange={e => setSearch(e.target.value)} 
+            style={{ flex: '1 1 260px' }}
+            aria-label="Search hosts by hostname, IP, site, OS, group, or tag"
+          />
+          <select className="input" value={siteFilter} onChange={e => setSiteFilter(e.target.value)} style={{ maxWidth: 220 }} aria-label="Filter by site">
             <option value="all">All Sites</option>
             {siteOptions.map(site => <option key={site} value={site}>{site}</option>)}
           </select>
-          <div className="ops-pills">
+          <div className="ops-pills" role="group" aria-label="Filter by platform">
             {[
               { key: 'all', label: 'All Platforms' },
               { key: 'windows', label: 'Windows' },
@@ -496,7 +564,12 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
               { key: 'freebsd', label: 'FreeBSD' },
               { key: 'other', label: 'Other' },
             ].map(filter => (
-              <button key={filter.key} className={`ops-pill ${osFilter === filter.key ? 'active' : ''}`} onClick={() => setOsFilter(filter.key)}>
+              <button 
+                key={filter.key} 
+                className={`ops-pill ${osFilter === filter.key ? 'active' : ''}`} 
+                onClick={() => setOsFilter(filter.key)}
+                aria-pressed={osFilter === filter.key}
+              >
                 {filter.label}
                 {filter.key !== 'all' && <span className="badge badge-sm" style={{ marginLeft: 6 }}>{osCounts[filter.key] || 0}</span>}
               </button>
@@ -508,19 +581,19 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
           <div className="ops-empty">No hosts match the current filters.</div>
         ) : (
           <div className="table-wrap">
-            <table className="table ops-table">
+            <table className="table ops-table" role="table" aria-label="Host inventory">
               <thead>
-                <tr>
-                  <th style={{ width: 36 }}>
-                    <input type="checkbox" checked={selected.length === filtered.length && filtered.length > 0} onChange={e => (e.target.checked ? selectAll() : clearSelect())} />
+                <tr role="row">
+                  <th style={{ width: 36 }} role="columnheader">
+                    <input type="checkbox" checked={selected.length === filtered.length && filtered.length > 0} onChange={e => (e.target.checked ? selectAll() : clearSelect())} aria-label="Select all visible hosts" />
                   </th>
-                  <th>Host</th>
-                  <th>Platform</th>
-                  <th>Compliance</th>
-                  <th>Exposure</th>
-                  <th>Tags</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                  <th role="columnheader">Host</th>
+                  <th role="columnheader">Platform</th>
+                  <th role="columnheader">Compliance</th>
+                  <th role="columnheader">Exposure</th>
+                  <th role="columnheader">Tags</th>
+                  <th role="columnheader">Status</th>
+                  <th role="columnheader">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -562,7 +635,7 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
                         <div className="ops-tag-row">
                           {tags.length === 0 && <span className="ops-table-meta">No tags</span>}
                           {tags.map(tag => <span key={tag.id || tag} className="badge badge-info">{tag.name || tag}</span>)}
-                          <button className="btn btn-sm" onClick={() => openTagModal(host)}>Manage Tags</button>
+                          <button className="btn btn-sm" onClick={() => openTagModal(host)} aria-label={`Manage tags for ${host.hostname || host.name}`}>Manage Tags</button>
                         </div>
                       </td>
                       <td>
@@ -574,12 +647,12 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
                         </div>
                       </td>
                       <td>
-                        <div className="btn-group">
-                          <button className="btn btn-sm" onClick={() => openDetail(host)}>Details</button>
-                          <button className="btn btn-sm" onClick={() => checkAgent(host.ip)}>Ping</button>
-                          {hasRole('admin') && <button className="btn btn-sm btn-warning" onClick={() => rebootHost(host.ip)}>Reboot</button>}
-                          {hasRole('admin') && <button className="btn btn-sm" onClick={() => shutdownHost(host.ip)}>Shutdown</button>}
-                          {hasRole('admin', 'operator') && <button className="btn btn-sm btn-danger" onClick={() => deleteHost(host.id)}>Delete</button>}
+                        <div className="btn-group" role="group" aria-label="Host actions">
+                          <button className="btn btn-sm" onClick={() => openDetail(host)} aria-label={`View details for ${host.hostname || host.name}`}>Details</button>
+                          <button className="btn btn-sm" onClick={() => checkAgent(host.ip)} aria-label={`Ping ${host.ip}`}>Ping</button>
+                          {hasRole('admin') && <button className="btn btn-sm btn-warning" onClick={() => rebootHost(host.ip)} aria-label={`Reboot ${host.ip}`}>Reboot</button>}
+                          {hasRole('admin') && <button className="btn btn-sm" onClick={() => shutdownHost(host.ip)} aria-label={`Shutdown ${host.ip}`}>Shutdown</button>}
+                          {hasRole('admin', 'operator') && <button className="btn btn-sm btn-danger" onClick={() => deleteHost(host.id)} aria-label={`Delete ${host.hostname || host.name}`}>Delete</button>}
                         </div>
                       </td>
                     </tr>

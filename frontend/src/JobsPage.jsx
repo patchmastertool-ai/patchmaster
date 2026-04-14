@@ -1,169 +1,293 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { CHPage, CHHeader, CHCard, CHStat, CHLabel, CHBadge, CHBtn, CHTable, CHTR, CHLoading, CHInput, CHEmpty, CH } from './CH.jsx';
-import { Activity, Search, RefreshCw, CheckCircle, AlertTriangle, Clock, Terminal, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 
-const STATUS_TABS = ['all', 'pending', 'running', 'success', 'failed', 'rolled_back'];
+const statusTabs = ['all', 'pending', 'running', 'success', 'failed', 'rolled_back'];
 
-const jobStatusColor = s => {
-  if (s === 'success' || s === 'completed') return CH.green;
-  if (s === 'failed')  return CH.red;
-  if (s === 'running') return CH.accent;
-  return CH.textSub;
-};
+// Local storage persistence hook for filter state (UI-009: Filter Persistence)
+function useFilterPersistence(key) {
+  const [savedFilters, setSavedFilters] = useState({});
 
-export default function JobsPage({ jobs = [], setJobs, API, apiFetch, useInterval, hasRole }) {
-  const [search, setSearch]       = useState('');
-  const [statusFilter, setStatus] = useState('all');
-  const [selectedJob, setSelJob]  = useState(null);
-  const [jobDetail, setDetail]    = useState(null);
-
-  const refresh = () => apiFetch(`${API}/api/jobs/`).then(r => r.json()).then(setJobs).catch(() => {});
-
-  useEffect(() => { refresh(); }, []);
-  if (useInterval) useInterval(refresh, 8000);
-
-  const openDetail = async job => {
-    setSelJob(job);
+  useEffect(() => {
     try {
-      const r = await apiFetch(`${API}/api/jobs/${job.id}`);
-      setDetail(await r.json());
-    } catch { setDetail(job); }
+      const saved = localStorage.getItem(`pm-filters-${key}`);
+      if (saved) {
+        setSavedFilters(JSON.parse(saved));
+      }
+    } catch {}
+  }, [key]);
+
+  const saveFilters = useCallback((filters) => {
+    try {
+      localStorage.setItem(`pm-filters-${key}`, JSON.stringify(filters));
+    } catch {}
+  }, [key]);
+
+  return [savedFilters, saveFilters];
+}
+
+export default function JobsPage({ jobs, setJobs, API, apiFetch, useInterval, hasRole }) {
+  // Persist filters to localStorage (UI-009)
+  const [persistedFilters, setPersistedFilters] = useFilterPersistence('jobs');
+  
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState(persistedFilters.status || 'all');
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [jobDetail, setJobDetail] = useState(null);
+  const [page, setPage] = useState(1);
+  const [perPage] = useState(50);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
+
+  // Defensive array check
+  const safeJobs = Array.isArray(jobs) ? jobs : [];
+
+  const refresh = () => {
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('per_page', String(perPage));
+    if (statusFilter !== 'all') {
+      params.set('status', statusFilter);
+    }
+    
+    apiFetch(`${API}/api/jobs/?${params}`)
+      .then((response) => response.json())
+      .then((data) => {
+        // Backend returns paginated response: {items, total, page, per_page, pages}
+        if (data && Array.isArray(data.items)) {
+          setJobs(data.items);
+          setTotal(data.total || 0);
+          setPages(data.pages || 1);
+        } else if (Array.isArray(data)) {
+          // Fallback for non-paginated response
+          setJobs(data);
+          setTotal(data.length);
+          setPages(1);
+        } else {
+          console.error('Jobs API returned unexpected data:', data);
+          setJobs([]);
+          setTotal(0);
+          setPages(1);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to fetch jobs:', error);
+        setJobs([]);
+        setTotal(0);
+        setPages(1);
+      });
   };
 
-  // Auto-refresh detail for running jobs
-  if (useInterval) useInterval(async () => {
-    if (selectedJob && jobDetail?.status === 'running') {
-      try { const r = await apiFetch(`${API}/api/jobs/${selectedJob.id}`); setDetail(await r.json()); } catch {}
+  useEffect(() => {
+    refresh();
+  }, [page, statusFilter]);
+
+  // Persist filters to localStorage when they change (UI-009: Filter Persistence)
+  useEffect(() => {
+    setPersistedFilters({ status: statusFilter });
+  }, [statusFilter, setPersistedFilters]);
+
+  // Keyboard navigation support (UI-014: Keyboard Nav)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl/Cmd + F focuses search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        document.querySelector('.search-input')?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useInterval(refresh, 8000);
+
+  const deleteJob = (id) => {
+    if (!window.confirm('Delete job?')) return;
+    apiFetch(`${API}/api/jobs/${id}`, { method: 'DELETE' }).then(refresh);
+  };
+
+  const openDetail = async (job) => {
+    setSelectedJob(job);
+    try {
+      const response = await apiFetch(`${API}/api/jobs/${job.id}`);
+      setJobDetail(await response.json());
+    } catch {
+      setJobDetail(job);
+    }
+  };
+
+  useInterval(async () => {
+    if (selectedJob && jobDetail && jobDetail.status === 'running') {
+      try {
+        const response = await apiFetch(`${API}/api/jobs/${selectedJob.id}`);
+        setJobDetail(await response.json());
+      } catch {}
     }
   }, selectedJob ? 3000 : null);
 
-  const filtered = useMemo(() => jobs.filter(j => {
+  const filtered = useMemo(() => safeJobs.filter((job) => {
     const term = search.toLowerCase();
-    const matchSearch = (j.action || '').toLowerCase().includes(term)
-      || (j.host_name || j.hostname || '').toLowerCase().includes(term)
-      || (j.status || '').toLowerCase().includes(term);
-    const matchStatus = statusFilter === 'all' || j.status === statusFilter;
-    return matchSearch && matchStatus;
-  }), [jobs, search, statusFilter]);
+    const matchSearch = (job.action || '').toLowerCase().includes(term)
+      || (job.host_name || '').toLowerCase().includes(term)
+      || (job.status || '').toLowerCase().includes(term);
+    // Status filter is now applied server-side, so we don't filter here
+    return matchSearch;
+  }), [safeJobs, search]);
 
   const counts = useMemo(() => {
-    const c = {};
-    STATUS_TABS.forEach(s => { c[s] = s === 'all' ? jobs.length : jobs.filter(j => j.status === s).length; });
-    return c;
-  }, [jobs]);
+    // For counts, we need to fetch all statuses - for now, show total only
+    // In a production app, you'd have a separate stats endpoint
+    const next = {};
+    statusTabs.forEach((status) => {
+      next[status] = status === 'all' ? total : 0; // Only 'all' shows accurate count
+    });
+    return next;
+  }, [total]);
 
   return (
-    <CHPage>
-      <CHHeader
-        kicker="Execution Ledger"
-        title="Job History"
-        subtitle={`${jobs.length} total jobs across all operations`}
-        actions={<CHBtn variant="ghost" onClick={refresh}><RefreshCw size={14} /> Refresh</CHBtn>}
-      />
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-        <CHStat label="Total Jobs"  value={jobs.length}                                         accent={CH.accent} />
-        <CHStat label="Running"     value={counts.running}  sub="currently executing"           accent={CH.accent} />
-        <CHStat label="Successful"  value={counts.success}  sub="completed without error"       accent={CH.green} />
-        <CHStat label="Failed"      value={counts.failed}   sub="require investigation"         accent={CH.red} />
+    <div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }} role="tablist" aria-label="Filter jobs by status">
+        {statusTabs.map((status) => (
+          <button 
+            key={status} 
+            className={`btn btn-sm ${statusFilter === status ? 'btn-primary' : ''}`} 
+            onClick={() => setStatusFilter(status)}
+            role="tab"
+            aria-selected={statusFilter === status}
+            aria-controls="jobs-table"
+          >
+            {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+            {counts[status] > 0 && <span style={{ marginLeft: 6, background: 'rgba(255,255,255,0.2)', borderRadius: 10, padding: '1px 6px', fontSize: 10 }}>{counts[status]}</span>}
+          </button>
+        ))}
       </div>
 
-      {/* Filter Bar + Table */}
-      <CHCard className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-2 flex-wrap">
-            {STATUS_TABS.map(s => (
-              <button key={s}
-                onClick={() => setStatus(s)}
-                className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
-                style={{
-                  background: statusFilter === s ? `${jobStatusColor(s)}20` : 'rgba(3,29,75,0.4)',
-                  color: statusFilter === s ? jobStatusColor(s) : CH.textSub,
-                  border: `1px solid ${statusFilter === s ? jobStatusColor(s) + '50' : CH.border}`,
-                }}
-              >
-                {s === 'rolled_back' ? 'Rolled Back' : s.charAt(0).toUpperCase() + s.slice(1)}
-                <span className="ml-1.5 opacity-70">({counts[s] || 0})</span>
-              </button>
-            ))}
+      <div className="card">
+        <div className="card-header">
+          <h3>Jobs ({total})</h3>
+          <div className="form-row">
+            <input className="input search-input" placeholder="Search by host, action, status..." value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search jobs by host, action, or status" />
+            <button className="btn btn-sm" onClick={refresh} aria-label="Refresh job list">Refresh</button>
           </div>
-          <CHInput placeholder="Search jobs…" value={search} onChange={e => setSearch(e.target.value)} icon={<Search size={14} />} className="ml-auto max-w-xs" />
         </div>
-
-        <CHTable headers={['#', 'Job Type', 'Host', 'Status', 'Operator', 'Started', 'Duration']}
-          emptyMessage="No jobs match the current filters.">
-          {filtered.map(job => {
-            const dur = job.completed_at && job.created_at
-              ? `${Math.round((new Date(job.completed_at) - new Date(job.created_at)) / 1000)}s` : '—';
-            return (
-              <CHTR key={job.id} onClick={() => openDetail(job)} selected={selectedJob?.id === job.id}>
-                <td className="px-6 py-4 font-mono text-xs" style={{ color: CH.textSub }}>#{job.id}</td>
-                <td className="px-6 py-4">
-                  <CHBadge color={CH.accent}>{job.action || job.job_type || job.type || '—'}</CHBadge>
-                </td>
-                <td className="px-6 py-4">
-                  <p className="text-sm font-bold" style={{ color: CH.text }}>{job.hostname || job.host_name || '—'}</p>
-                  {job.host_ip && <p className="text-[11px] font-mono" style={{ color: CH.textSub }}>{job.host_ip}</p>}
-                </td>
-                <td className="px-6 py-4">
-                  <CHBadge color={jobStatusColor(job.status)}>{job.status}</CHBadge>
-                </td>
-                <td className="px-6 py-4 text-xs" style={{ color: CH.textSub }}>{job.triggered_by || job.operator || '—'}</td>
-                <td className="px-6 py-4 text-xs font-mono" style={{ color: CH.textSub }}>
-                  {job.created_at ? new Date(job.created_at).toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
-                </td>
-                <td className="px-6 py-4 font-mono text-xs" style={{ color: CH.textSub }}>{dur}</td>
-              </CHTR>
-            );
-          })}
-        </CHTable>
-      </CHCard>
-
-      {/* Detail Panel */}
-      {selectedJob && (
-        <CHCard>
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <CHLabel>Job Detail</CHLabel>
-              <h3 className="text-xl font-bold mt-1" style={{ color: CH.text }}>
-                {jobDetail?.action || selectedJob.action} <span className="font-mono text-sm" style={{ color: CH.textSub }}>#{selectedJob.id}</span>
-              </h3>
+        {filtered.length === 0 ? (
+          // UX-004 FIX: Distinguish between "no data" and "no matches"
+          safeJobs.length === 0 ? (
+            <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
+              <h3 style={{ marginBottom: 8, color: '#0f172a' }}>No jobs yet</h3>
+              <p>Patch jobs will appear here once you start patching hosts.</p>
+              <p style={{ fontSize: 13, marginTop: 12 }}>
+                Go to <strong>Hosts</strong> → Select a host → Click <strong>Patch</strong> to create your first job.
+              </p>
             </div>
-            <div className="flex gap-2">
-              {jobDetail?.status === 'running' && (
-                <CHBtn variant="danger" onClick={async () => {
-                  await apiFetch(`${API}/api/jobs/${selectedJob.id}/abort`, { method: 'POST' });
-                  refresh();
-                }}>Abort</CHBtn>
-              )}
-              <CHBtn variant="ghost" onClick={() => { setSelJob(null); setDetail(null); }}><X size={14} /></CHBtn>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: 'Status',    val: jobDetail?.status || '—',         color: jobStatusColor(jobDetail?.status) },
-              { label: 'Host',      val: jobDetail?.hostname || jobDetail?.host_name || '—' },
-              { label: 'Started',   val: jobDetail?.created_at ? new Date(jobDetail.created_at).toLocaleString() : '—' },
-              { label: 'Operator',  val: jobDetail?.triggered_by || jobDetail?.operator || 'system' },
-            ].map((item, i) => (
-              <div key={i} className="rounded-xl p-4" style={{ background: 'rgba(3,29,75,0.4)', border: `1px solid ${CH.border}` }}>
-                <CHLabel>{item.label}</CHLabel>
-                <p className="text-sm font-bold mt-1" style={{ color: item.color || CH.text }}>{item.val}</p>
+          ) : (
+            <p className="text-muted">No jobs match the filter.</p>
+          )
+        ) : (
+          <>
+            <table className="table">
+              <thead><tr><th>ID</th><th>Host</th><th>Action</th><th>Status</th><th>By</th><th>Created</th><th>Actions</th></tr></thead>
+              <tbody>{filtered.map((job) => (
+                <tr key={job.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(job)}>
+                  <td style={{ color: '#64748b', fontSize: 12 }}>#{job.id}</td>
+                  <td><strong>{job.host_name || job.host_id || '--'}</strong>{job.host_ip && <div style={{ fontSize: 11, color: '#64748b' }}>{job.host_ip}</div>}</td>
+                  <td>{job.action || job.name}</td>
+                  <td>
+                    <span className={`badge badge-${job.status === 'success' ? 'success' : job.status === 'running' ? 'warning' : job.status === 'failed' ? 'danger' : job.status === 'rolled_back' ? 'info' : 'info'}`}>
+                      {job.status === 'running' ? 'Running ' : ''}{job.status}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 12 }}>{job.initiated_by || '--'}</td>
+                  <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{job.created_at ? new Date(job.created_at).toLocaleString() : '--'}</td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    {hasRole('admin', 'operator') && <button className="btn btn-sm btn-danger" onClick={() => deleteJob(job.id)}>Del</button>}
+                    {hasRole('admin', 'operator') && ['success', 'failed'].includes(job.status) && (
+                      <button
+                        className="btn btn-sm btn-warning"
+                        style={{ marginLeft: 4 }}
+                        onClick={async (event) => {
+                          event.stopPropagation();
+                          if (!window.confirm(`Roll back job #${job.id}? This will attempt to restore the pre-patch snapshot.`)) return;
+                          try {
+                            const response = await apiFetch(`${API}/api/jobs/${job.id}/rollback`, { method: 'POST' });
+                            const payload = await response.json();
+                            if (response.ok) refresh();
+                            else alert(payload.detail || 'Rollback failed');
+                          } catch (error) {
+                            alert(`Error: ${error.message}`);
+                          }
+                        }}
+                      >
+                        Rollback
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}</tbody>
+            </table>
+            {/* Pagination controls */}
+            {pages > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '16px 0', borderTop: '1px solid #e2e8f0' }}>
+                <button 
+                  className="btn btn-sm" 
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  Previous
+                </button>
+                <span style={{ fontSize: 13, color: '#64748b' }}>
+                  Page {page} of {pages} ({total} total jobs)
+                </span>
+                <button 
+                  className="btn btn-sm" 
+                  onClick={() => setPage(p => Math.min(pages, p + 1))}
+                  disabled={page === pages}
+                >
+                  Next
+                </button>
               </div>
-            ))}
-          </div>
-          {jobDetail?.output && (
-            <div className="mt-5">
-              <CHLabel>Output Log</CHLabel>
-              <pre className="mt-2 p-4 rounded-xl text-xs font-mono overflow-auto max-h-64 leading-relaxed"
-                style={{ background: 'rgba(0,0,0,0.4)', color: CH.textSub, border: `1px solid ${CH.border}` }}>
-                {jobDetail.output}
-              </pre>
+            )}
+          </>
+        )}
+      </div>
+
+      {selectedJob && (
+        <div className="modal-overlay" onClick={() => { setSelectedJob(null); setJobDetail(null); }}>
+          <div className="modal-card" style={{ maxWidth: 700, maxHeight: '80vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3>Job #{selectedJob.id} - {selectedJob.action}</h3>
+              <button className="btn btn-sm" onClick={() => { setSelectedJob(null); setJobDetail(null); }}>Close</button>
             </div>
-          )}
-        </CHCard>
+            {jobDetail ? (
+              <div>
+                <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
+                  <div className="stat-card"><div className="stat-info"><span className="stat-number" style={{ fontSize: 14 }}>{jobDetail.host_name || jobDetail.host_id}</span><span className="stat-label">Host</span></div></div>
+                  <div className="stat-card"><div className="stat-info"><span className="stat-number" style={{ fontSize: 14 }}><span className={`badge badge-${jobDetail.status === 'success' ? 'success' : jobDetail.status === 'running' ? 'warning' : jobDetail.status === 'failed' ? 'danger' : 'info'}`}>{jobDetail.status}</span></span><span className="stat-label">Status</span></div></div>
+                  <div className="stat-card"><div className="stat-info"><span className="stat-number" style={{ fontSize: 14 }}>{jobDetail.initiated_by || '--'}</span><span className="stat-label">Initiated By</span></div></div>
+                </div>
+                <div style={{ marginBottom: 12, fontSize: 13, color: '#475569' }}>
+                  <span>Started: {jobDetail.started_at ? new Date(jobDetail.started_at).toLocaleString() : '--'}</span>
+                  <span style={{ marginLeft: 16 }}>Completed: {jobDetail.completed_at ? new Date(jobDetail.completed_at).toLocaleString() : '--'}</span>
+                </div>
+                {jobDetail.output && (
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Output Log {jobDetail.status === 'running' && <span style={{ color: '#f59e0b' }}>Live</span>}</div>
+                    <div style={{ background: '#0f172a', color: '#a5d6a7', padding: 12, borderRadius: 8, fontFamily: 'monospace', fontSize: 12, whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto', lineHeight: 1.5 }}>
+                      {jobDetail.output}
+                    </div>
+                  </div>
+                )}
+                {jobDetail.result && (
+                  <details style={{ marginTop: 12 }}>
+                    <summary>Final Result JSON</summary>
+                    <pre className="code-block" style={{ marginTop: 8 }}>{JSON.stringify(jobDetail.result, null, 2)}</pre>
+                  </details>
+                )}
+              </div>
+            ) : <p className="text-muted">Loading...</p>}
+          </div>
+        </div>
       )}
-    </CHPage>
+    </div>
   );
 }
