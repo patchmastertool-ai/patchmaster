@@ -4,8 +4,12 @@ import logging
 import os
 from typing import Optional
 from datetime import datetime
+from pathlib import Path
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.db_models import Host
 
 logger = logging.getLogger("patchmaster.agent_manager")
 
@@ -150,9 +154,6 @@ def prepare_upgrade(agent_id: str) -> dict:
         "version": EXPECTED_AGENT_VERSION,
     }
 
-
-from pathlib import Path
-from models.db_models import Host
 
 # Memory configuration
 MAX_AGENT_MEMORY_MB = int(os.getenv("PM_MAX_AGENT_MEMORY_MB", "200"))
