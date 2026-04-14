@@ -95,3 +95,24 @@ Backend (3):
 **Plans:**
 - [x] 05-01-PLAN.md — Agent Blockers and Backend Completion
 - [x] 05-02-PLAN.md — UI Fixes and Enhancements
+
+## v2.2.0 - Security Hardening
+
+### Phase 6: Security Foundation
+
+**Goal:** Address security vulnerabilities, implement authentication improvements, and add compliance features
+
+**Depends on:** Phase 5
+
+**Issues:**
+
+Security Hardening:
+- SEC-001: Authentication improvements (MFA support, token refresh)
+- SEC-002: Input validation and sanitization (XSS, SQL injection prevention)
+- SEC-003: Session management (secure cookies, timeout, refresh tokens)
+- SEC-004: API security (rate limiting, CORS, security headers)
+- SEC-005: RBAC improvements (granular permissions)
+- SEC-006: Audit logging for security events
+
+**Plans:**
+- [ ] Planning not yet started
