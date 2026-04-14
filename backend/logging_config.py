@@ -110,8 +110,9 @@ class AsyncLogHandler(logging.Handler):
             try:
                 for record in records:
                     handler.emit(record)
-            except Exception:
-                pass  # Silently ignore handler errors
+            except Exception as e:
+                # Log the error instead of silently swallowing
+                logging.warning(f"AsyncLogHandler: failed to emit records: {e}")
 
     def shutdown(self):
         """Gracefully shutdown the handler."""
