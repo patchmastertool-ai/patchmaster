@@ -9,6 +9,7 @@ Maps PatchMaster events to Jira workflow states.
 import os
 from enum import Enum
 from typing import Any, Optional
+from functools import cached_property
 
 import httpx
 
@@ -83,13 +84,18 @@ class JiraIntegration:
         """
         self.url = (url or os.getenv("JIRA_URL", "")).rstrip("/")
         self.email = email or os.getenv("JIRA_EMAIL", "")
-        self.api_token = api_token or os.getenv("JIRA_API_TOKEN", "")
+        self._api_token = api_token  # Store internal, access via property
         self.project_key = project_key or os.getenv("JIRA_PROJECT_KEY", "PATCH")
 
         if not self.url:
             raise ValueError("Jira URL is required. Set JIRA_URL env var.")
 
         self._client: Optional[httpx.AsyncClient] = None
+
+    @property
+    def api_token(self) -> str:
+        """Get API token from environment or internal storage."""
+        return os.getenv("JIRA_API_TOKEN", "") or (self._api_token or "")
 
     @property
     def auth(self) -> dict:
