@@ -61,3 +61,37 @@ Backend (3):
 - [x] 04-02-PLAN.md — Core Features (dependency resolution, RBAC, compliance, audit, plugins, reports, scheduling)
 - [x] 04-03-PLAN.md — Remaining Integrations (Jira, Slack, custom, timezone, rolling restart, Windows snapshots, canary)
 - [x] 04-04-PLAN.md — Gap Closure (wire 8 unwired artifacts to main.py)
+
+### Phase 5: Agent Blockers, UI Fixes, and Backend Completion
+
+**Goal:** Fix remaining Agent blockers (Windows installer, version mismatch, memory leak), UI issues (slow search, export, themes, etc.), and complete Backend issues (logging, timezone, IPv6)
+
+**Depends on:** Phase 4
+
+**Issues:**
+
+Agent Blockers (3):
+- AGENT-002: Windows Agent Installation
+- AGENT-003: Agent Version Mismatch
+- AGENT-004: Agent Memory Leak
+
+UI Issues (15):
+- UI-003: Slow Search
+- UI-007: Export Failed
+- UI-013: Theme Switching
+- UI-014: Keyboard Nav
+- UI-015: Tooltips
+- UI-016: Print Styles
+- UI-017: CSV Encoding
+- UI-009: Filter Persistence
+- UI-011: Mobile Responsive
+- UI-012: Accessibility (ARIA)
+
+Backend (3):
+- BACK-018: Logging Performance
+- BACK-019: Timezone Handling
+- BACK-020: IPv6 Support
+
+**Plans:**
+- [x] 05-01-PLAN.md — Agent Blockers and Backend Completion
+- [x] 05-02-PLAN.md — UI Fixes and Enhancements
