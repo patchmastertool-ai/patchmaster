@@ -115,4 +115,4 @@ Security Hardening:
 - SEC-006: Audit logging for security events
 
 **Plans:**
-- [ ] Planning not yet started
+- [ ] 06-01-PLAN.md — Security Foundation (auth, validation, sessions, RBAC, audit)
