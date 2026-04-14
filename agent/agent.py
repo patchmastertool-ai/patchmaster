@@ -25,6 +25,8 @@ import tarfile
 import psutil
 import functools
 import hmac as _hmac
+import gc
+import sys
 from pathlib import Path
 
 # Flask imports are optional - only needed when running the agent API server
@@ -259,6 +261,16 @@ last_patch_ts = Gauge(
     registry=REGISTRY,
 )
 
+# Memory leak detection - tracked in update_metrics_loop
+_memory_baseline_bytes = 0
+_memory_baseline_set_time = 0
+_memory_warnings_logged = {"100mb": False, "200mb": False}
+agent_memory_delta = Gauge(
+    "agent_memory_delta_bytes",
+    "Agent memory delta from baseline in bytes",
+    registry=REGISTRY,
+)
+
 # Cache for WSUS operations (Windows only). Helps report scan/install progress to the backend/UI.
 WSUS_CACHE = {
     "status": "idle",  # idle | scanning | installing | error
@@ -278,9 +290,11 @@ def _host_os_label() -> str:
 
 
 def update_metrics_loop():
+    global _memory_baseline_bytes, _memory_baseline_set_time
     prev_read = None
     prev_write = None
     prev_ts = None
+
     while True:
         try:
             cpu_usage.set(psutil.cpu_percent(interval=None))
@@ -288,6 +302,37 @@ def update_metrics_loop():
             host_info.labels(host_os=_host_os_label()).set(1)
             io_now = psutil.disk_io_counters()
             now_ts = time.time()
+
+            # Memory leak detection - set baseline on first run, monitor growth
+            process = psutil.Process()
+            current_rss = process.memory_info().rss
+            if _memory_baseline_bytes == 0:
+                _memory_baseline_bytes = current_rss
+                _memory_baseline_set_time = now_ts
+                logger.info(
+                    f"Memory baseline set: {_memory_baseline_bytes / (1024 * 1024):.1f} MB"
+                )
+            else:
+                memory_growth = current_rss - _memory_baseline_bytes
+                agent_memory_delta.set(max(0, memory_growth))
+                # Log warning if memory grows >100MB above baseline after 30 minutes
+                uptime_mins = (now_ts - _memory_baseline_set_time) / 60
+                if uptime_mins >= 30 and memory_growth > 100 * 1024 * 1024:
+                    if not _memory_warnings_logged["100mb"]:
+                        logger.warning(
+                            f"Memory leak indicator: memory grew {memory_growth / (1024 * 1024):.1f} MB "
+                            f"({uptime_mins:.0f} minutes after baseline)"
+                        )
+                        _memory_warnings_logged["100mb"] = True
+                # Log error if memory grows >200MB above baseline
+                if memory_growth > 200 * 1024 * 1024:
+                    if not _memory_warnings_logged["200mb"]:
+                        logger.error(
+                            f"Memory leak detected: memory grew {memory_growth / (1024 * 1024):.1f} MB "
+                            f"({uptime_mins:.0f} minutes after baseline)"
+                        )
+                        _memory_warnings_logged["200mb"] = True
+
             if (
                 io_now
                 and prev_read is not None
@@ -1858,6 +1903,63 @@ def api_version():
             "version": str(__version__),
         }
     )
+
+
+@app.route("/api/debug/memory")
+def debug_memory():
+    """Return memory profiling information for leak detection."""
+    global _memory_baseline_bytes, _memory_baseline_set_time
+    try:
+        process = psutil.Process()
+        mem_info = process.memory_info()
+        current_rss = mem_info.rss
+        current_vms = mem_info.vms
+        uptime = time.time() - psutil.boot_time()
+        delta = (
+            max(0, current_rss - _memory_baseline_bytes)
+            if _memory_baseline_bytes > 0
+            else 0
+        )
+        return jsonify(
+            {
+                "current_rss_bytes": current_rss,
+                "current_vms_bytes": current_vms,
+                "baseline_rss_bytes": _memory_baseline_bytes,
+                "delta_from_baseline_bytes": delta,
+                "uptime_seconds": uptime,
+                "active_threads": threading.active_count(),
+                "baseline_set_time": _memory_baseline_set_time,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Memory debug endpoint error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/debug/gc", methods=["POST"])
+@_require_auth
+def debug_gc():
+    """Trigger garbage collection and return freed bytes estimate."""
+    try:
+        import gc
+
+        gc.collect()
+        # Get memory before and after to estimate freed bytes
+        process = psutil.Process()
+        mem_before = process.memory_info().rss
+        # Force collect and get stats
+        collected = gc.collect()
+        mem_after = process.memory_info().rss
+        freed_estimate = max(0, mem_before - mem_after)
+        return jsonify(
+            {
+                "objects_collected": collected,
+                "freed_bytes_estimate": freed_estimate,
+            }
+        )
+    except Exception as e:
+        logger.error(f"GC endpoint error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/system/reboot", methods=["POST"])
