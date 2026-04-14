@@ -265,6 +265,8 @@ last_patch_ts = Gauge(
 _memory_baseline_bytes = 0
 _memory_baseline_set_time = 0
 _memory_warnings_logged = {"100mb": False, "200mb": False}
+
+logger = logging.getLogger("patch-agent")
 agent_memory_delta = Gauge(
     "agent_memory_delta_bytes",
     "Agent memory delta from baseline in bytes",
@@ -397,7 +399,6 @@ STATE_DIR = os.path.dirname(SNAPSHOT_DIR) or "."
 SHUTDOWN_QUEUE_FILE = os.path.join(STATE_DIR, "software-shutdown-queue.json")
 QUEUE_LOCK = threading.Lock()
 
-logger = logging.getLogger("patch-agent")
 logger.setLevel(logging.INFO)
 
 # Set up formatter
