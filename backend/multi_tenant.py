@@ -97,8 +97,12 @@ class MultiTenantMiddleware(BaseHTTPMiddleware):
         if tenant_header:
             try:
                 tenant_id = int(tenant_header)
+                if tenant_id < 0 or tenant_id > 999999:  # Reasonable bounds
+                    logger.warning(f"Invalid X-Tenant-ID header: {tenant_header}")
+                    tenant_id = None
             except ValueError:
                 logger.warning(f"Invalid X-Tenant-ID header: {tenant_header}")
+                tenant_id = None
 
         # Set tenant context
         token = _current_tenant_id.set(tenant_id)
