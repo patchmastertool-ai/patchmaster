@@ -1,10 +1,13 @@
 """Hosts API — CRUD with PostgreSQL, groups, tags."""
 
 import asyncio
+import ipaddress
 import logging
+import re
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic_core import PydanticCustomError
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -60,14 +63,35 @@ class HostOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+def _validate_ip_address(value: str) -> str:
+    """Validate that the IP address is a valid IPv4 or IPv6 address.
+
+    Supports:
+    - IPv4: e.g., "192.168.1.1"
+    - IPv6: e.g., "2001:0db8:85a3:0000:0000:8a2e:0370:7334" or "::1"
+    """
+    try:
+        # This validates both IPv4 and IPv6
+        ipaddress.ip_address(value)
+        return value
+    except ValueError as e:
+        raise PydanticCustomError(
+            "ip_address_invalid",
+            "Invalid IP address: {value}. Must be a valid IPv4 or IPv6 address.",
+            {"value": value},
+        )
+
+
 class HostCreate(BaseModel):
     hostname: str
-    ip: str
+    ip: str = Field(..., description="IPv4 or IPv6 address")
     site: str = ""
     os: str = ""
     os_version: str = ""
     groups: List[str] = []
     tags: List[str] = []
+
+    _ip_validator = field_validator("ip")(_validate_ip_address)
 
 
 class HostUpdate(BaseModel):
@@ -78,6 +102,13 @@ class HostUpdate(BaseModel):
     os_version: Optional[str] = None
     groups: Optional[List[str]] = None
     tags: Optional[List[str]] = None
+
+    @field_validator("ip")
+    @classmethod
+    def ip_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            _validate_ip_address(v)
+        return v
 
 
 # ── Helpers ──
