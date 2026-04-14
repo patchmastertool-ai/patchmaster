@@ -47,7 +47,7 @@ from models.db_models import (
 from license import get_license_info
 import jwt
 from jwt import InvalidTokenError
-from auth import SECRET_KEY, ALGORITHM
+from auth import SECRET_KEY, ALGORITHM, get_current_user
 import pandas as pd
 from fpdf import FPDF
 import tempfile
