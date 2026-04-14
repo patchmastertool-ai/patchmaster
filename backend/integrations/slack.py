@@ -51,7 +51,7 @@ EVENT_MESSAGE_TEMPLATES = {
         "title": "CVE Warning",
     },
     "host_offline": {
-        "emoji": " :red_circle:",
+        "emoji": ":red_circle:",
         "color": "danger",
         "title": "Host Offline",
     },
