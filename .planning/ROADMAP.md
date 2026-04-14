@@ -134,7 +134,7 @@ Security Hardening:
 | Integration | 9 |
 
 **Plans:**
-- [ ] 07-01 — Agent Features (rolling restart, snapshot, canary)
+- [x] 07-01 — Agent Features (rolling restart, snapshot, canary)
 - [ ] 07-02 — Backend Optimization (caching, queries)
 - [ ] 07-03 — Remaining UI fixes (2 issues)
 - [ ] 07-04 — Integrations (GraphQL, webhooks, metrics, SIEM)
