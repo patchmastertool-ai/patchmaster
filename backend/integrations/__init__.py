@@ -1,11 +1,27 @@
 """External integrations for PatchMaster.
 
 Provides integration modules for:
+- Jira: Create and manage Jira tickets
+- Slack: Send notifications to Slack channels
 - Splunk: Send events to Splunk HTTP Event Collector
 - Sumo Logic: Send events to Sumo Logic HTTP Source
 - ServiceNow: Create incidents via ServiceNow REST API
+- Custom: Framework for custom integrations
 """
 
+from integrations.jira import (
+    JiraIntegration,
+    JiraIssueType,
+    JiraPriority,
+    create_patch_failure_ticket,
+    create_cve_alert_ticket,
+    update_ticket_status,
+)
+from integrations.slack import (
+    SlackIntegration,
+    send_patch_job_notification,
+    send_cve_alert,
+)
 from integrations.splunk import (
     SplunkIntegration,
     send_patch_job_event,
@@ -21,8 +37,29 @@ from integrations.servicenow import (
     create_patch_failure_incident,
     create_cve_alert_incident,
 )
+from integrations.custom import (
+    BaseIntegration,
+    CustomIntegrationRegistry,
+    IntegrationCategory,
+    IntegrationCapability,
+    event_dispatcher,
+    create_custom_integration,
+    get_integration_health,
+    integration,
+)
 
 __all__ = [
+    # Jira
+    "JiraIntegration",
+    "JiraIssueType",
+    "JiraPriority",
+    "create_patch_failure_ticket",
+    "create_cve_alert_ticket",
+    "update_ticket_status",
+    # Slack
+    "SlackIntegration",
+    "send_patch_job_notification",
+    "send_cve_alert",
     # Splunk
     "SplunkIntegration",
     "send_patch_job_event",
@@ -38,4 +75,13 @@ __all__ = [
     "ServiceNowImpact",
     "create_patch_failure_incident",
     "create_cve_alert_incident",
+    # Custom
+    "BaseIntegration",
+    "CustomIntegrationRegistry",
+    "IntegrationCategory",
+    "IntegrationCapability",
+    "event_dispatcher",
+    "create_custom_integration",
+    "get_integration_health",
+    "integration",
 ]
