@@ -179,4 +179,36 @@ Plans:
 
 **Depends on:** Phase 11
 
-**Plans:** 0/1 plans
+**Plans:** 1/1 plans complete
+
+---
+
+## Gap Closure: Milestone Audit Fixes
+
+### Phase 14: Test Collection Fix
+
+**Goal:** Fix pytest collection errors identified in Phase 08 verification
+**Depends on:** Phase 12
+**Gap Closure:** Closes gap from MILESTONE-AUDIT.md (pytest.ini missing ignore directive)
+
+**Plans:**
+- [ ] 14-01-PLAN.md — Fix pytest.ini ignore directive for test_agent_shutdown_queue.py
+
+### Phase 15: Create REQUIREMENTS.md
+
+**Goal:** Create missing REQUIREMENTS.md file for traceability and cross-reference
+**Depends on:** Phase 14
+**Gap Closure:** Closes gap from MILESTONE-AUDIT.md (REQUIREMENTS.md not found)
+
+**Plans:**
+- [ ] 15-01-PLAN.md — Generate REQUIREMENTS.md from ROADMAP.md issue IDs
+
+### Phase 16: Create VALIDATION.md Files
+
+**Goal:** Create VALIDATION.md for all phases to satisfy Nyquist compliance
+**Depends on:** Phase 15
+**Gap Closure:** Closes gap from MILESTONE-AUDIT.md (all 12 phases lack VALIDATION.md)
+
+**Plans:**
+- [ ] 16-01-PLAN.md — Create VALIDATION.md for phases 01-06
+- [ ] 16-02-PLAN.md — Create VALIDATION.md for phases 07-12
