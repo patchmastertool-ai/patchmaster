@@ -162,14 +162,13 @@ Security Hardening:
 
 ## v2.5.0 - PatchRepo Git Server
 
-*In progress*
+**Shipped:** 2026-04-15
 
 ### Phase 11: PatchRepo Git Server - Built-in Git server with Azure Repos-like features
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Add a built-in Git server with Azure Repos-like features to PatchRepo
 **Depends on:** Phase 10
 **Plans:** 1/1 plans complete
 
 Plans:
-- [x] TBD (run /gsd-plan-phase 11 to break down) (completed 2026-04-15)
+- [x] 11-01-PLAN.md — Dulwich dependency + PatchRepo/PullRequest models
