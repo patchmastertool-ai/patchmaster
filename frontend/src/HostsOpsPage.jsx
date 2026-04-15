@@ -319,6 +319,22 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
         osText.includes('freebsd') ||
         osText.includes('bsd')) return 'freebsd';
     
+    // Solaris detection
+    if (groups.includes('solaris') || 
+        osText.includes('solaris') ||
+        osText.includes('opensolaris') ||
+        osText.includes('sunos')) return 'solaris';
+    
+    // HP-UX detection
+    if (groups.includes('hp-ux') || 
+        groups.includes('hpux') ||
+        osText.includes('hp-ux') ||
+        osText.includes('hpux')) return 'hpux';
+    
+    // AIX detection
+    if (groups.includes('aix') || 
+        osText.includes('aix')) return 'aix';
+    
     return 'other';
   };
 
@@ -392,7 +408,7 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
   const osCounts = safeHosts.reduce((acc, host) => {
     acc[osFamily(host)] = (acc[osFamily(host)] || 0) + 1;
     return acc;
-  }, { windows: 0, debian: 0, rhel: 0, arch: 0, opensuse: 0, alpine: 0, freebsd: 0, other: 0 });
+  }, { windows: 0, debian: 0, rhel: 0, arch: 0, opensuse: 0, alpine: 0, freebsd: 0, solaris: 0, hpux: 0, aix: 0, other: 0 });
   const siteOptions = useMemo(() => {
     const names = Array.from(new Set(safeHosts.map(host => (host.site || '').trim()).filter(Boolean)));
     names.sort((a, b) => a.localeCompare(b));
@@ -437,6 +453,9 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
     { label: 'Windows', value: osCounts.windows },
     { label: 'Debian / Ubuntu', value: osCounts.debian },
     { label: 'RHEL / RPM', value: osCounts.rhel },
+    { label: 'Solaris', value: osCounts.solaris },
+    { label: 'HP-UX', value: osCounts.hpux },
+    { label: 'AIX', value: osCounts.aix },
     { label: 'Other', value: osCounts.other },
   ];
 
@@ -586,6 +605,9 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
               { key: 'opensuse', label: 'openSUSE' },
               { key: 'alpine', label: 'Alpine' },
               { key: 'freebsd', label: 'FreeBSD' },
+              { key: 'solaris', label: 'Solaris' },
+              { key: 'hpux', label: 'HP-UX' },
+              { key: 'aix', label: 'AIX' },
               { key: 'other', label: 'Other' },
             ].map(filter => (
               <button 
