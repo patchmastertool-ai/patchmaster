@@ -359,6 +359,145 @@ class SolarisManager:
 
         return info
 
+    def _filter_security_packages(self, packages):
+        """
+        Query backend to filter packages to only those with CVEs.
+
+        Args:
+            packages: List of package dicts with 'name' key or list of strings
+
+        Returns:
+            List of package names that have security vulnerabilities
+        """
+        try:
+            import requests
+            import logging
+
+            # Get controller URL and token from environment
+            controller_url = os.getenv("CONTROLLER_URL", "http://localhost:3000")
+            token = os.getenv("AGENT_TOKEN", "")
+
+            # Get host ID from local cache
+            host_id = self._get_host_id()
+            if not host_id:
+                logging.warning("No host_id found, cannot filter security packages")
+                return [
+                    p if isinstance(p, str) else p.get("name", "") for p in packages
+                ]
+
+            # Extract package names
+            pkg_names = []
+            for p in packages:
+                if isinstance(p, str):
+                    pkg_names.append(p)
+                elif isinstance(p, dict):
+                    pkg_names.append(p.get("name", ""))
+
+            pkg_names = [n for n in pkg_names if n]
+
+            if not pkg_names:
+                return []
+
+            # Query backend CVE filter API
+            response = requests.post(
+                f"{controller_url}/api/cve/filter-security",
+                json={
+                    "host_id": host_id,
+                    "packages": pkg_names,
+                    "severity_threshold": "medium",
+                },
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=30,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                security_pkgs = data.get("security_packages", [])
+                logging.info(
+                    f"CVE filter: {len(security_pkgs)}/{len(pkg_names)} packages have security issues"
+                )
+                return security_pkgs
+            else:
+                logging.warning(
+                    f"CVE filter failed with status {response.status_code}, installing all packages"
+                )
+                return pkg_names
+
+        except Exception as e:
+            logging.warning(f"CVE filter error: {e}, installing all packages")
+            return [p if isinstance(p, str) else p.get("name", "") for p in packages]
+
+    def _get_host_id(self):
+        """Get host ID from local cache or registration"""
+        try:
+            for path in [
+                "/var/lib/patch-agent/host_id",
+                "/etc/patch-agent/host_id",
+                "host_id",
+            ]:
+                if os.path.exists(path):
+                    with open(path, "r") as f:
+                        return f.read().strip()
+        except Exception:
+            pass
+        return None
+
+    def get_proxies(self):
+        """Get proxy settings from environment.
+
+        Returns:
+            Dict with proxy settings.
+        """
+        proxies = {}
+        for key in ["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"]:
+            value = os.getenv(key) or os.getenv(key.lower())
+            if value:
+                proxies[key.lower()] = value
+        return proxies
+
+    def download_packages(self, packages, output_dir):
+        """Download packages for offline installation.
+
+        Args:
+            packages: List of package names to download.
+            output_dir: Directory to save downloaded packages.
+
+        Returns:
+            Tuple of (success, downloaded_files, error_message).
+        """
+        import urllib.parse
+
+        if not packages:
+            return True, [], "No packages specified"
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        downloaded = []
+        errors = []
+
+        # Get publisher info for constructing download URLs
+        proxies = self.get_proxies()
+
+        for pkg in packages:
+            try:
+                # Use pkg download command
+                cmd = [self.pkg_cmd, "download", "-d", output_dir, pkg]
+                rc, out = self._run_cmd(cmd, timeout=600)
+
+                if rc == 0:
+                    # Find downloaded file
+                    for f in os.listdir(output_dir):
+                        if pkg in f:
+                            downloaded.append(os.path.join(output_dir, f))
+                else:
+                    errors.append(f"Failed to download {pkg}: {out}")
+            except Exception as e:
+                errors.append(f"Error downloading {pkg}: {e}")
+
+        if errors:
+            return False, downloaded, "; ".join(errors)
+        return True, downloaded, "Success"
+
 
 # Standalone detection function
 def get_solaris_manager() -> Optional[SolarisManager]:

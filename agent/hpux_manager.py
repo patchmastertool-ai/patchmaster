@@ -390,6 +390,232 @@ class HPUXManager:
 
         return patches
 
+    def version(self) -> str:
+        """Get HP-UX version information.
+
+        Returns:
+            HP-UX version string.
+        """
+        rc, out = self._run_cmd(["uname", "-a"], timeout=10)
+        if rc == 0:
+            return out.strip()
+        return "unknown"
+
+    def get_current_version(self, product: str) -> str:
+        """Get current version of a product.
+
+        Args:
+            product: Product name.
+
+        Returns:
+            Current version string.
+        """
+        rc, out = self._run_cmd(
+            [self.swlist_cmd, "-l", "product", "-a", "revision", product],
+            timeout=30,
+        )
+        if rc == 0:
+            for line in out.splitlines():
+                if "@" in line:
+                    parts = line.split("@")
+                    if len(parts) >= 2:
+                        return parts[1].strip()
+        return "unknown"
+
+    def parse_version(self, version_string: str) -> Tuple[str, str, str]:
+        """Parse version string into components.
+
+        Args:
+            version_string: Version string (e.g., "B.11.31").
+
+        Returns:
+            Tuple of (major, minor, patch).
+        """
+        parts = version_string.split(".")
+        major = parts[0] if len(parts) > 0 else ""
+        minor = parts[1] if len(parts) > 1 else ""
+        patch = parts[2] if len(parts) > 2 else ""
+        return major, minor, patch
+
+    def get_update_info(self, product: str) -> Dict[str, str]:
+        """Get detailed update information for a product.
+
+        Args:
+            product: Product name.
+
+        Returns:
+            Dict with update information.
+        """
+        info = {
+            "name": product,
+            "current_version": "",
+            "available_version": "",
+            "publisher": "",
+            "update_available": False,
+        }
+
+        # Get current version
+        info["current_version"] = self.get_current_version(product)
+
+        # Get available version
+        rc, out = self._run_cmd(
+            [self.swlist_cmd, "-x", "update_available=true", "-l", "product", product],
+            timeout=60,
+        )
+
+        if rc == 0:
+            for line in out.splitlines():
+                if product in line and "update" in line.lower():
+                    # Try to extract available version
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        info["available_version"] = parts[-1]
+
+        info["update_available"] = info["current_version"] != info[
+            "available_version"
+        ] and bool(info["available_version"])
+
+        return info
+
+    def _filter_security_packages(self, packages):
+        """
+        Query backend to filter packages to only those with CVEs.
+
+        Args:
+            packages: List of package dicts with 'name' key or list of strings
+
+        Returns:
+            List of package names that have security vulnerabilities
+        """
+        try:
+            import requests
+            import logging
+
+            # Get controller URL and token from environment
+            controller_url = os.getenv("CONTROLLER_URL", "http://localhost:3000")
+            token = os.getenv("AGENT_TOKEN", "")
+
+            # Get host ID from local cache
+            host_id = self._get_host_id()
+            if not host_id:
+                logging.warning("No host_id found, cannot filter security packages")
+                return [
+                    p if isinstance(p, str) else p.get("name", "") for p in packages
+                ]
+
+            # Extract package names
+            pkg_names = []
+            for p in packages:
+                if isinstance(p, str):
+                    pkg_names.append(p)
+                elif isinstance(p, dict):
+                    pkg_names.append(p.get("name", ""))
+
+            pkg_names = [n for n in pkg_names if n]
+
+            if not pkg_names:
+                return []
+
+            # Query backend CVE filter API
+            response = requests.post(
+                f"{controller_url}/api/cve/filter-security",
+                json={
+                    "host_id": host_id,
+                    "packages": pkg_names,
+                    "severity_threshold": "medium",
+                },
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=30,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                security_pkgs = data.get("security_packages", [])
+                logging.info(
+                    f"CVE filter: {len(security_pkgs)}/{len(pkg_names)} packages have security issues"
+                )
+                return security_pkgs
+            else:
+                logging.warning(
+                    f"CVE filter failed with status {response.status_code}, installing all packages"
+                )
+                return pkg_names
+
+        except Exception as e:
+            logging.warning(f"CVE filter error: {e}, installing all packages")
+            return [p if isinstance(p, str) else p.get("name", "") for p in packages]
+
+    def _get_host_id(self):
+        """Get host ID from local cache or registration"""
+        try:
+            for path in [
+                "/var/lib/patch-agent/host_id",
+                "/etc/patch-agent/host_id",
+                "host_id",
+            ]:
+                if os.path.exists(path):
+                    with open(path, "r") as f:
+                        return f.read().strip()
+        except Exception:
+            pass
+        return None
+
+    def get_proxies(self):
+        """Get proxy settings from environment.
+
+        Returns:
+            Dict with proxy settings.
+        """
+        proxies = {}
+        for key in ["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"]:
+            value = os.getenv(key) or os.getenv(key.lower())
+            if value:
+                proxies[key.lower()] = value
+        return proxies
+
+    def download_packages(self, packages, output_dir):
+        """Download packages for offline installation.
+
+        Args:
+            packages: List of package names to download.
+            output_dir: Directory to save downloaded packages.
+
+        Returns:
+            Tuple of (success, downloaded_files, error_message).
+        """
+        if not packages:
+            return True, [], "No packages specified"
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        downloaded = []
+        errors = []
+
+        proxies = self.get_proxies()
+
+        for pkg in packages:
+            try:
+                # HP-UX uses depot files - try to copy from configured depots
+                # First check if package exists in any depot
+                rc, out = self._run_cmd(
+                    [self.swlist_cmd, "-l", "product", "-s", pkg], timeout=60
+                )
+
+                if rc != 0:
+                    # Try to find package in default depots
+                    rc, out = self._run_cmd([self.swlist_cmd, "-s", "*"], timeout=60)
+
+                # For HP-UX, we may need to use swcopy or fetch from depot
+                # This is a simplified implementation
+                logger.info(f"Attempting to stage package {pkg} for download")
+                errors.append(f"HP-UX download requires depot configuration for {pkg}")
+            except Exception as e:
+                errors.append(f"Error downloading {pkg}: {e}")
+
+        if errors:
+            return False, downloaded, "; ".join(errors)
+        return True, downloaded, "Success"
+
 
 # Standalone detection function
 def get_hpux_manager() -> Optional[HPUXManager]:

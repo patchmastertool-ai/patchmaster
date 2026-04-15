@@ -429,6 +429,250 @@ class AIXManager:
 
         return info
 
+    def version(self) -> str:
+        """Get AIX version information.
+
+        Returns:
+            AIX version string.
+        """
+        rc, out = self._run_cmd(["oslevel"], timeout=10)
+        if rc == 0:
+            return out.strip()
+        return "unknown"
+
+    def get_current_version(self, fileset: str) -> str:
+        """Get current version of a fileset.
+
+        Args:
+            fileset: Fileset name.
+
+        Returns:
+            Current version string.
+        """
+        rc, out = self._run_cmd([self.lslpp_cmd, "-L", "-qc", fileset], timeout=30)
+        if rc == 0 and ":" in out:
+            parts = out.strip().split(":")
+            if len(parts) >= 1:
+                # Format: fileset.version
+                fs_with_version = parts[0]
+                if "." in fs_with_version:
+                    return fs_with_version.rsplit(".", 1)[-1]
+        return "unknown"
+
+    def parse_version(self, version_string: str) -> Tuple[str, str, str, str]:
+        """Parse AIX version string into components.
+
+        Args:
+            version_string: Version string (e.g., "7.2.0.0").
+
+        Returns:
+            Tuple of (version, tl, sp, fix).
+        """
+        parts = version_string.split(".")
+        version = parts[0] if len(parts) > 0 else ""
+        tl = parts[1] if len(parts) > 1 else ""
+        sp = parts[2] if len(parts) > 2 else ""
+        fix = parts[3] if len(parts) > 3 else ""
+        return version, tl, sp, fix
+
+    def get_update_info(self, fileset: str) -> Dict[str, str]:
+        """Get detailed update information for a fileset.
+
+        Args:
+            fileset: Fileset name.
+
+        Returns:
+            Dict with update information.
+        """
+        info = {
+            "name": fileset,
+            "current_version": "",
+            "available_version": "",
+            "publisher": "",
+            "update_available": False,
+        }
+
+        # Get current version
+        info["current_version"] = self.get_current_version(fileset)
+
+        # Check for updates via instfix
+        rc, out = self._run_cmd([self.instfix_cmd, "-ivk", fileset], timeout=60)
+
+        if rc == 0 and out:
+            # Check if there are fixes available
+            if "Not found" not in out and "All filesets" not in out:
+                info["available_version"] = "update available"
+
+        # Also check via emgr for efixes
+        rc2, out2 = self._run_cmd([self.emgr_cmd, "-l"], timeout=60)
+        if rc2 == 0:
+            for line in out2.splitlines():
+                if fileset in line:
+                    info["available_version"] = "efix available"
+                    break
+
+        info["update_available"] = bool(info["available_version"])
+
+        return info
+
+    def _filter_security_packages(self, packages):
+        """
+        Query backend to filter packages to only those with CVEs.
+
+        Args:
+            packages: List of package dicts with 'name' key or list of strings
+
+        Returns:
+            List of package names that have security vulnerabilities
+        """
+        try:
+            import requests
+            import logging
+
+            # Get controller URL and token from environment
+            controller_url = os.getenv("CONTROLLER_URL", "http://localhost:3000")
+            token = os.getenv("AGENT_TOKEN", "")
+
+            # Get host ID from local cache
+            host_id = self._get_host_id()
+            if not host_id:
+                logging.warning("No host_id found, cannot filter security packages")
+                return [
+                    p if isinstance(p, str) else p.get("name", "") for p in packages
+                ]
+
+            # Extract package names
+            pkg_names = []
+            for p in packages:
+                if isinstance(p, str):
+                    pkg_names.append(p)
+                elif isinstance(p, dict):
+                    pkg_names.append(p.get("name", ""))
+
+            pkg_names = [n for n in pkg_names if n]
+
+            if not pkg_names:
+                return []
+
+            # Query backend CVE filter API
+            response = requests.post(
+                f"{controller_url}/api/cve/filter-security",
+                json={
+                    "host_id": host_id,
+                    "packages": pkg_names,
+                    "severity_threshold": "medium",
+                },
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=30,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                security_pkgs = data.get("security_packages", [])
+                logging.info(
+                    f"CVE filter: {len(security_pkgs)}/{len(pkg_names)} packages have security issues"
+                )
+                return security_pkgs
+            else:
+                logging.warning(
+                    f"CVE filter failed with status {response.status_code}, installing all packages"
+                )
+                return pkg_names
+
+        except Exception as e:
+            logging.warning(f"CVE filter error: {e}, installing all packages")
+            return [p if isinstance(p, str) else p.get("name", "") for p in packages]
+
+    def _get_host_id(self):
+        """Get host ID from local cache or registration"""
+        try:
+            for path in [
+                "/var/lib/patch-agent/host_id",
+                "/etc/patch-agent/host_id",
+                "host_id",
+            ]:
+                if os.path.exists(path):
+                    with open(path, "r") as f:
+                        return f.read().strip()
+        except Exception:
+            pass
+        return None
+
+    def get_proxies(self):
+        """Get proxy settings from environment.
+
+        Returns:
+            Dict with proxy settings.
+        """
+        proxies = {}
+        for key in ["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"]:
+            value = os.getenv(key) or os.getenv(key.lower())
+            if value:
+                proxies[key.lower()] = value
+        return proxies
+
+    def download_packages(self, packages, output_dir):
+        """Download packages for offline installation.
+
+        Args:
+            packages: List of package names to download.
+            output_dir: Directory to save downloaded packages.
+
+        Returns:
+            Tuple of (success, downloaded_files, error_message).
+        """
+        if not packages:
+            return True, [], "No packages specified"
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        downloaded = []
+        errors = []
+
+        proxies = self.get_proxies()
+
+        for pkg in packages:
+            try:
+                # For AIX, packages are typically .bff files or tarballs
+                # Try to find them in standard locations
+                possible_paths = [
+                    f"/tmp/{pkg}.bff",
+                    f"/tmp/{pkg}.tar",
+                    f"/mnt/{pkg}.bff",
+                    f"/mnt/{pkg}.tar",
+                ]
+
+                found = False
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        import shutil
+
+                        dest = os.path.join(output_dir, os.path.basename(path))
+                        shutil.copy2(path, dest)
+                        downloaded.append(dest)
+                        found = True
+                        break
+
+                if not found:
+                    # Try using NIM to fetch package
+                    rc, out = self._run_cmd(
+                        [self.nimclient_cmd, "-o", "showres", pkg], timeout=300
+                    )
+                    if rc == 0:
+                        # Package found in NIM, note that download would need NIM master
+                        logger.info(f"Package {pkg} available via NIM")
+                        errors.append(
+                            f"AIX download via NIM not fully implemented for {pkg}"
+                        )
+                    else:
+                        errors.append(f"Package {pkg} not found")
+            except Exception as e:
+                errors.append(f"Error downloading {pkg}: {e}")
+
+        if errors:
+            return False, downloaded, "; ".join(errors)
+        return True, downloaded, "Success"
+
 
 # Standalone detection function
 def get_aix_manager() -> Optional[AIXManager]:
