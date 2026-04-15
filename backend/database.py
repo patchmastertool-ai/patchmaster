@@ -12,6 +12,7 @@ from sqlalchemy import event
 _DATABASE_URL: Optional[str] = None
 _engine = None
 _async_session = None
+# Note: async_session is exported via __getattr__ below, not as a direct variable
 
 
 def reset_engine():
@@ -41,7 +42,7 @@ class Base(DeclarativeBase):
 
 def get_engine():
     """Lazily create and return the database engine."""
-    global _engine, _async_session
+    global _engine, _async_session, async_session
 
     if _engine is None:
         url = get_database_url()
@@ -56,6 +57,7 @@ def get_engine():
             _engine._is_mock = True  # Mark as mock
             # Also create a mock async session for backward compatibility
             _async_session = MagicMock()
+            async_session = _async_session  # Update module-level export
             return _engine
 
         _engine = create_async_engine(
@@ -81,6 +83,7 @@ def get_engine():
         _async_session = async_sessionmaker(
             _engine, class_=AsyncSession, expire_on_commit=False
         )
+        async_session = _async_session  # Update module-level export
         _engine._is_mock = False
 
     return _engine
