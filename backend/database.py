@@ -1,6 +1,7 @@
 """Database engine & session factory — PostgreSQL via SQLAlchemy async."""
 
 import os
+import sys
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
@@ -85,22 +86,20 @@ def get_engine():
     return _engine
 
 
-# Module-level aliases for backwards compatibility
 def _get_engine():
     return get_engine()
 
 
 def _get_async_session():
-    get_engine()  # Ensure initialized
+    get_engine()
     return _async_session
 
 
-# Module-level __getattr__ for backward compatibility
 def __getattr__(name):
     if name == "engine":
         return get_engine()
     if name == "async_session":
-        get_engine()  # Initialize the engine
+        get_engine()
         return _async_session
     if name == "Base":
         return Base
