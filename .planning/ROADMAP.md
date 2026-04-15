@@ -163,3 +163,13 @@ Security Hardening:
 ## v2.5.0 - PatchRepo Git Server
 
 *In progress*
+
+### Phase 11: PatchRepo Git Server - Built-in Git server with Azure Repos-like features
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 10
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 11 to break down)
