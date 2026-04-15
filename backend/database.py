@@ -134,4 +134,4 @@ async def init_db():
     async with db_engine.begin() as conn:
         from models import db_models  # noqa: F401
 
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(Base.metadata.create_all, checkfirst=True)
