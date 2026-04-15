@@ -13,17 +13,19 @@ from sqlalchemy import event
 _DATABASE_URL: Optional[str] = None
 _engine = None
 _async_session = None
+_engine_is_mock = False
 
 
 def reset_engine():
     """Reset the engine state - useful for testing."""
-    global _engine, _async_session, _DATABASE_URL
-    if _engine is not None and hasattr(_engine, "_is_mock") and _engine._is_mock:
+    global _engine, _async_session, _DATABASE_URL, _engine_is_mock
+    if _engine is not None and _engine_is_mock:
         # Keep mock, just reset
         pass
     else:
         _engine = None
         _async_session = None
+        _engine_is_mock = False
 
 
 def get_database_url() -> str:
@@ -42,7 +44,7 @@ class Base(DeclarativeBase):
 
 def get_engine():
     """Lazily create and return the database engine."""
-    global _engine, _async_session, async_session
+    global _engine, _async_session, async_session, _engine_is_mock
 
     if _engine is None:
         url = get_database_url()
@@ -53,7 +55,7 @@ def get_engine():
             _engine.begin = MagicMock()
             _engine.dispose = MagicMock()
             _engine.sync_engine = MagicMock()
-            _engine._is_mock = True
+            _engine_is_mock = True
             _async_session = MagicMock()
             async_session = _async_session
             return _engine
@@ -81,7 +83,7 @@ def get_engine():
             _engine, class_=AsyncSession, expire_on_commit=False
         )
         async_session = _async_session
-        _engine._is_mock = False
+        _engine_is_mock = False
 
     return _engine
 
