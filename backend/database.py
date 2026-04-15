@@ -12,7 +12,6 @@ from sqlalchemy import event
 _DATABASE_URL: Optional[str] = None
 _engine = None
 _async_session = None
-# Note: async_session is accessed via __getattr__ below
 
 
 def reset_engine():
@@ -101,7 +100,8 @@ def __getattr__(name):
     if name == "engine":
         return get_engine()
     if name == "async_session":
-        return _get_async_session()
+        get_engine()  # Initialize the engine
+        return _async_session
     if name == "Base":
         return Base
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
