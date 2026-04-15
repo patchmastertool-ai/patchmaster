@@ -1175,10 +1175,7 @@ class PatchRepo(Base):
         "PullRequest", back_populates="repo", cascade="all, delete-orphan"
     )
 
-    __table_args__ = (
-        Index("ix_patch_repos_name", "name"),
-        Index("ix_patch_repos_created_at", "created_at"),
-    )
+    __table_args__ = (Index("ix_patch_repos_created_at", "created_at"),)
 
 
 class PullRequestState(str, enum.Enum):
