@@ -135,7 +135,18 @@ Security Hardening:
 
 **Plans:**
 - [x] 07-01 — Agent Features (rolling restart, snapshot, canary)
-- [ ] 07-02 — Backend Optimization (caching, queries)
-- [ ] 07-03 — Remaining UI fixes (2 issues)
-- [ ] 07-04 — Integrations (GraphQL, webhooks, metrics, SIEM)
-- [ ] 07-05 — Advanced Features (multi-tenancy, plugins, reports)
+- [x] 07-02 — Backend Optimization (caching, queries)
+- [x] 07-03 — Remaining UI fixes (2 issues)
+- [x] 07-04 — Integrations (GraphQL, webhooks, metrics, SIEM)
+- [x] 07-05 — Advanced Features (multi-tenancy, plugins, reports)
+
+## v2.4.0 - New OS Support
+
+### Phase 09: Solaris, HP-UX, AIX Support
+
+**Goal:** Add package management and UI support for Solaris, HP-UX, and AIX operating systems
+
+**Depends on:** Phase 8
+
+**Plans:**
+- [x] 09-01-PLAN.md — Solaris/HP-UX/AIX package managers and UI integration (Complete: 2026-04-15)
