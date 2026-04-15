@@ -48,6 +48,22 @@ from prometheus_client import start_http_server, Gauge, CollectorRegistry
 
 __version__ = "2.0.0"
 
+# Import new platform managers (Solaris, HP-UX, AIX)
+try:
+    from agent.solaris_manager import SolarisManager
+except ImportError:
+    SolarisManager = None
+
+try:
+    from agent.hpux_manager import HPUXManager
+except ImportError:
+    HPUXManager = None
+
+try:
+    from agent.aix_manager import AIXManager
+except ImportError:
+    AIXManager = None
+
 # --- Config ---
 IS_WINDOWS = platform.system() == "Windows"
 
@@ -1603,6 +1619,18 @@ def get_pkg_manager():
     if IS_WINDOWS:
         return WinManager()
 
+    # Check for Solaris (uses IPS/pkg)
+    if _check_solaris():
+        return SolarisManager() if SolarisManager else BasePackageManager()
+
+    # Check for HP-UX (uses SD-UX/swinstall)
+    if _check_hpux():
+        return HPUXManager() if HPUXManager else BasePackageManager()
+
+    # Check for AIX (uses installp/NIM)
+    if _check_aix():
+        return AIXManager() if AIXManager else BasePackageManager()
+
     # Check for FreeBSD (uses pkg)
     if platform.system() == "FreeBSD" or os.path.exists("/usr/local/sbin/pkg"):
         return FreeBSDPkgManager()
@@ -1667,6 +1695,153 @@ def get_pkg_manager():
         return DnfManager()  # Fallback for RHEL/CentOS
 
     return BasePackageManager()
+
+
+def _check_solaris() -> bool:
+    """Check if running on Solaris/OpenSolaris."""
+    try:
+        # Check kernel name
+        rc, out = run_cmd(["uname", "-s"], timeout=5)
+        if rc == 0:
+            system = out.strip().lower()
+            if "sunos" in system or "solaris" in system:
+                return True
+
+        # Check for Solaris-specific files
+        if os.path.exists("/usr/sbin/unixd"):
+            return True
+        if os.path.exists("/etc/release"):
+            try:
+                with open("/etc/release") as f:
+                    content = f.read().lower()
+                    if "solaris" in content or "opensolaris" in content:
+                        return True
+            except:
+                pass
+    except:
+        pass
+    return False
+
+
+def _check_hpux() -> bool:
+    """Check if running on HP-UX."""
+    try:
+        # Check kernel name
+        rc, out = run_cmd(["uname", "-s"], timeout=5)
+        if rc == 0:
+            system = out.strip().lower()
+            if "hp-ux" in system or "hpux" in system:
+                return True
+
+        # Check for HP-UX-specific files
+        if os.path.exists("/usr/sbin/swagentd"):
+            return True
+        if os.path.exists("/usr/sbin/swinstall"):
+            return True
+    except:
+        pass
+    return False
+
+
+def _check_aix() -> bool:
+    """Check if running on AIX."""
+    try:
+        # Check kernel name
+        rc, out = run_cmd(["uname", "-s"], timeout=5)
+        if rc == 0:
+            system = out.strip().lower()
+            if system == "aix":
+                return True
+
+        # Check for AIX-specific files
+        if os.path.exists("/etc/AIX"):
+            return True
+        if os.path.exists("/usr/sbin/nimclient"):
+            return True
+    except:
+        pass
+    return False
+
+
+def get_solaris_manager():
+    """Get SolarisManager if on Solaris, else None."""
+    if SolarisManager and _check_solaris():
+        return SolarisManager()
+    return None
+
+
+def get_hpux_manager():
+    """Get HPUXManager if on HP-UX, else None."""
+    if HPUXManager and _check_hpux():
+        return HPUXManager()
+    return None
+
+
+def get_aix_manager():
+    """Get AIXManager if on AIX, else None."""
+    if AIXManager and _check_aix():
+        return AIXManager()
+    return None
+
+
+def detect_package_manager():
+    """Detect and return the appropriate package manager.
+
+    Returns:
+        A tuple of (manager_name, manager_instance) for the detected OS.
+    """
+    if IS_WINDOWS:
+        return ("windows", WinManager())
+
+    if _check_solaris() and SolarisManager:
+        return ("solaris", SolarisManager())
+    if _check_hpux() and HPUXManager:
+        return ("hpux", HPUXManager())
+    if _check_aix() and AIXManager:
+        return ("aix", AIXManager())
+
+    if platform.system() == "FreeBSD" or os.path.exists("/usr/local/sbin/pkg"):
+        return ("freebsd", FreeBSDPkgManager())
+
+    if os.path.exists("/sbin/apk") or os.path.exists("/usr/sbin/apk"):
+        if os.path.exists("/etc/alpine-release"):
+            return ("alpine", ApkManager())
+        if os.path.exists("/etc/os-release"):
+            try:
+                with open("/etc/os-release") as f:
+                    content = f.read().lower()
+                    if "id=alpine" in content:
+                        return ("alpine", ApkManager())
+            except:
+                pass
+
+    if os.path.exists("/usr/bin/zypper"):
+        return ("opensuse", ZypperManager())
+
+    if os.path.exists("/usr/bin/pacman"):
+        if os.path.exists("/etc/arch-release"):
+            return ("arch", PacmanManager())
+        if os.path.exists("/etc/os-release"):
+            try:
+                with open("/etc/os-release") as f:
+                    content = f.read().lower()
+                    if (
+                        "id=arch" in content
+                        or "id_like=arch" in content
+                        or "id=manjaro" in content
+                    ):
+                        return ("arch", PacmanManager())
+            except:
+                pass
+
+    if os.path.exists("/usr/bin/apt-get"):
+        return ("debian", AptManager())
+    if os.path.exists("/usr/bin/dnf"):
+        return ("rhel", DnfManager())
+    if os.path.exists("/usr/bin/yum"):
+        return ("rhel", DnfManager())
+
+    return ("unknown", BasePackageManager())
 
 
 pkg_mgr = get_pkg_manager()
