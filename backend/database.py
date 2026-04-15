@@ -54,6 +54,8 @@ def get_engine():
             _engine.dispose = MagicMock()
             _engine.sync_engine = MagicMock()
             _engine._is_mock = True  # Mark as mock
+            # Also create a mock async session for backward compatibility
+            _async_session = MagicMock()
             return _engine
 
         _engine = create_async_engine(
@@ -94,16 +96,12 @@ def _get_async_session():
     return _async_session
 
 
-import sys
-
-
-# Set up module-level __getattr__ for backwards compatibility
+# Module-level __getattr__ for backward compatibility
 def __getattr__(name):
     if name == "engine":
         return get_engine()
     if name == "async_session":
-        get_engine()
-        return _async_session
+        return _get_async_session()
     if name == "Base":
         return Base
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
