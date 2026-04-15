@@ -12,7 +12,7 @@ from sqlalchemy import event
 _DATABASE_URL: Optional[str] = None
 _engine = None
 _async_session = None
-# Note: async_session is exported via __getattr__ below, not as a direct variable
+# Note: async_session is accessed via __getattr__ below
 
 
 def reset_engine():
@@ -47,17 +47,15 @@ def get_engine():
     if _engine is None:
         url = get_database_url()
         if not url:
-            # Return a mock engine for testing when no URL is set
             from unittest.mock import MagicMock
 
             _engine = MagicMock()
             _engine.begin = MagicMock()
             _engine.dispose = MagicMock()
             _engine.sync_engine = MagicMock()
-            _engine._is_mock = True  # Mark as mock
-            # Also create a mock async session for backward compatibility
+            _engine._is_mock = True
             _async_session = MagicMock()
-            async_session = _async_session  # Update module-level export
+            async_session = _async_session
             return _engine
 
         _engine = create_async_engine(
@@ -73,7 +71,6 @@ def get_engine():
             isolation_level="READ COMMITTED",
         )
 
-        # Only register events on real engine, not mock
         @event.listens_for(_engine.sync_engine, "connect")
         def set_statement_timeout(dbapi_connection, connection_record):
             cursor = dbapi_connection.cursor()
@@ -83,7 +80,7 @@ def get_engine():
         _async_session = async_sessionmaker(
             _engine, class_=AsyncSession, expire_on_commit=False
         )
-        async_session = _async_session  # Update module-level export
+        async_session = _async_session
         _engine._is_mock = False
 
     return _engine
