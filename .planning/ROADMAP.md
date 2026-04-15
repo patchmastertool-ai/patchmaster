@@ -172,3 +172,11 @@ Security Hardening:
 
 Plans:
 - [x] 11-01-PLAN.md — Dulwich dependency + PatchRepo/PullRequest models
+
+### Phase 12: Function Testing and Security Review
+
+**Goal:** Product and agent functional testing, VAPT (Vulnerability Assessment and Penetration Testing), source code review with summary
+
+**Depends on:** Phase 11
+
+**Plans:** 0/1 plans
