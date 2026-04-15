@@ -10,7 +10,7 @@ Features:
 
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator

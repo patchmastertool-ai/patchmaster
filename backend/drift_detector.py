@@ -90,11 +90,11 @@ class ConfigBaseline(Base):
     network = Column(JSON, default=dict)  # {interface: {key: value}}
     registry = Column(JSON, default=dict)  # Windows registry entries
     files = Column(JSON, default=dict)  # {file_path: {hash, mtime, content}}
-    metadata = Column(JSON, default=dict)  # Additional metadata
+    baseline_metadata = Column(JSON, default=dict)  # Additional metadata
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by = Column(String(100), nullable=True)
 
-    host = relationship("Host", back_populates="snapshots_db")
+    # Note: Host relationship intentionally omitted to avoid conflicts
 
     def __repr__(self):
         return f"<ConfigBaseline id={self.id} host_id={self.host_id} name={self.baseline_name}>"
