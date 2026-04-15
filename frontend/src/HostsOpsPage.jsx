@@ -626,6 +626,7 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
         {filtered.length === 0 ? (
           <div className="ops-empty">No hosts match the current filters.</div>
         ) : (
+          <>
           <div className="table-wrap">
             <table className="table ops-table" role="table" aria-label="Host inventory">
               <thead>
@@ -708,7 +709,7 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
             </table>
           </div>
           
-          {/* Pagination controls (UI-010) */}
+
           <div className="ops-table-toolbar" style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
             <div className="ops-actions">
               <button className="btn btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>Previous</button>
@@ -716,6 +717,7 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
               <button className="btn btn-sm" onClick={() => setPage(p => p + 1)} disabled={filtered.length < PER_PAGE}>Next</button>
             </div>
           </div>
+          </>
         )}
       </div>
 
