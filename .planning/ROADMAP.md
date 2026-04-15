@@ -149,4 +149,17 @@ Security Hardening:
 **Depends on:** Phase 8
 
 **Plans:**
-1/1 plans complete
+- [x] 09-01-PLAN.md — Solaris/HP-UX/AIX package managers
+
+### Phase 10: OS Feature Parity
+
+**Goal:** Add missing features (security filtering, proxy handling, download, version info) to Solaris, HP-UX, and AIX managers
+
+**Depends on:** Phase 09
+
+**Plans:**
+- [x] 10-01-PLAN.md — Feature parity for new OS managers
+
+## v2.5.0 - PatchRepo Git Server
+
+*In progress*
