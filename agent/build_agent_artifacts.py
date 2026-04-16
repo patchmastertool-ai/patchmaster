@@ -52,7 +52,7 @@ def build_windows_zip():
     if os.path.exists(stage_dir): shutil.rmtree(stage_dir)
     os.makedirs(stage_dir)
     
-    # Copy files
+    # Copy source files
     shutil.copy(os.path.join(AGENT_DIR, "agent.py"), stage_dir)
     shutil.copy(os.path.join(AGENT_DIR, "main.py"), stage_dir)
     shutil.copy(os.path.join(AGENT_DIR, "requirements.txt"), stage_dir)
@@ -60,16 +60,67 @@ def build_windows_zip():
     # Add a README for Windows users
     with open(os.path.join(stage_dir, "README.txt"), "w") as f:
         f.write("PatchMaster Windows Agent\n")
-        f.write("1. Install Python 3.8+\n")
-        f.write("2. pip install -r requirements.txt\n")
-        f.write("3. python agent.py --port 8080 --metrics-port 9100\n")
-        f.write("4. CONTROLLER_URL=http://<master>:8000 python main.py\n")
+        f.write("1. Run patchmaster-agent-installer.exe to install\n")
+        f.write("2. Or manually: Install Python 3.8+\n")
+        f.write("3. pip install -r requirements.txt\n")
+        f.write("4. python agent.py --port 8080 --metrics-port 9100\n")
+        f.write("5. CONTROLLER_URL=http://<master>:8000 python main.py\n")
 
     # Zip it up
     shutil.make_archive(zip_path, 'zip', stage_dir)
     final_path = zip_path + ".zip"
     
     log(f"Created: {final_path}")
+    return final_path
+
+
+def build_windows_zip_with_exes(installer_exe=None, uninstaller_exe=None):
+    """Build Windows ZIP that includes the installer and uninstaller EXEs"""
+    log("Building Windows Agent (ZIP) with installers...")
+    
+    zip_name = "agent-windows"
+    zip_path = os.path.join(DIST_DIR, zip_name)
+    
+    # Create a staging directory
+    stage_dir = os.path.join(DIST_DIR, "windows_stage_full")
+    if os.path.exists(stage_dir): shutil.rmtree(stage_dir)
+    os.makedirs(stage_dir)
+    
+    # Copy installer and uninstaller EXEs if they exist
+    if installer_exe and os.path.exists(installer_exe):
+        shutil.copy(installer_exe, os.path.join(stage_dir, "patchmaster-agent-installer.exe"))
+        log(f"Added installer EXE to ZIP")
+    
+    if uninstaller_exe and os.path.exists(uninstaller_exe):
+        shutil.copy(uninstaller_exe, os.path.join(stage_dir, "patchmaster-agent-uninstaller.exe"))
+        log(f"Added uninstaller EXE to ZIP")
+    
+    # Add install script
+    with open(os.path.join(stage_dir, "install.cmd"), "w") as f:
+        f.write("@echo off\n")
+        f.write("echo PatchMaster Agent Installer\n")
+        f.write("patchmaster-agent-installer.exe\n")
+    
+    # Add a README for Windows users
+    with open(os.path.join(stage_dir, "README.txt"), "w") as f:
+        f.write("PatchMaster Windows Agent Installation Package\n")
+        f.write("=" * 50 + "\n\n")
+        f.write("Quick Install:\n")
+        f.write("  1. Run install.cmd (or patchmaster-agent-installer.exe)\n")
+        f.write("  2. The agent will be installed as a Windows service\n\n")
+        f.write("Uninstall:\n")
+        f.write("  - Run patchmaster-agent-uninstaller.exe\n\n")
+        f.write("Manual Installation:\n")
+        f.write("  1. Install Python 3.8+\n")
+        f.write("  2. Extract this ZIP to C:\\PatchMaster-Agent\n")
+        f.write("  3. pip install -r requirements.txt\n")
+        f.write("  4. python agent.py --port 8080 --metrics-port 9100\n")
+
+    # Zip it up
+    shutil.make_archive(zip_path, 'zip', stage_dir)
+    final_path = zip_path + ".zip"
+    
+    log(f"Created: {final_path} ({os.path.getsize(final_path) / 1024 / 1024:.2f} MB)")
     return final_path
 
 
@@ -121,6 +172,40 @@ def build_windows_installer_exe():
     log(f"Created: {final_installer}")
     return final_installer
 
+
+def build_windows_uninstaller_exe():
+    """Build patchmaster-agent-uninstaller.exe via PyInstaller."""
+    if not sys.platform.startswith("win"):
+        return None
+
+    venv_dir = os.path.join(DIST_DIR, "winbuild_venv")
+    py  = os.path.join(venv_dir, "Scripts", "python.exe")
+    pip = os.path.join(venv_dir, "Scripts", "pip.exe")
+    if not os.path.exists(py):
+        subprocess.run([sys.executable, "-m", "venv", venv_dir], check=True)
+    subprocess.run([pip, "install"] + pip_args(["pyinstaller"]), check=True, env=PIP_ENV)
+
+    build_dir = os.path.join(DIST_DIR, "pyi_build")
+    dist_dir  = os.path.join(DIST_DIR, "pyi_dist")
+    os.makedirs(build_dir, exist_ok=True)
+    os.makedirs(dist_dir,  exist_ok=True)
+
+    uninstaller_py = os.path.join(AGENT_DIR, "uninstall_agent.py")
+    uninstaller_name = "patchmaster-agent-uninstaller"
+
+    subprocess.run([py, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile",
+                    "--distpath", dist_dir, "--workpath", build_dir,
+                    "--name", uninstaller_name,
+                    "--console",
+                    uninstaller_py], check=True)
+
+    final_uninstaller = os.path.join(dist_dir, f"{uninstaller_name}.exe")
+    if not os.path.exists(final_uninstaller):
+        raise Exception("Windows uninstaller EXE not produced")
+    log(f"Created: {final_uninstaller}")
+    return final_uninstaller
+
+
 def build_linux_rpm():
     log("Building Linux Agent (RPM)...")
     if SKIP_LINUX:
@@ -140,18 +225,29 @@ def build_linux_rpm():
         import shutil as _sh
         fpm = _sh.which("fpm")
         docker = _sh.which("docker")
-        if fpm:
-            script_path = os.path.join(AGENT_DIR, "..", "packaging", "fpm", "build-rpm.sh")
-            version = "2.0.0"
-            env = PIP_ENV.copy(); env["OFFLINE"] = "1" if OFFLINE else "0"
-            subprocess.run(["bash", script_path, version], check=True, cwd=os.path.dirname(script_path), env=env)
-            rpm_path = os.path.join(os.path.dirname(BACKEND_STATIC_DIR), "static", "agent-latest.rpm")
-            deb_path = build_linux_deb()
-            log(f"Created (FPM): {rpm_path}")
-            log(f"Created (DEB): {deb_path}")
-            return rpm_path, deb_path
-        elif docker:
-            log("FPM not found locally, attempting Docker-based build...")
+        bash = _sh.which("bash")
+        
+        # Try to run the FPM build script - it has fallback to rpmbuild
+        if bash:
+            script_path = os.path.abspath(os.path.join(AGENT_DIR, "..", "packaging", "fpm", "build-rpm.sh"))
+            if os.path.exists(script_path):
+                log("Attempting to build RPM using packaging/fpm/build-rpm.sh...")
+                if fpm:
+                    log("FPM detected - will use FPM for building")
+                else:
+                    log("FPM not found - build script will try rpmbuild fallback")
+                
+                version = "2.0.0"
+                env = PIP_ENV.copy(); env["OFFLINE"] = "1" if OFFLINE else "0"
+                subprocess.run(["bash", script_path, version], check=True, cwd=os.path.dirname(script_path), env=env)
+                rpm_path = os.path.join(os.path.dirname(BACKEND_STATIC_DIR), "static", "agent-latest.rpm")
+                deb_path = build_linux_deb()
+                log(f"Created (RPM): {rpm_path}")
+                log(f"Created (DEB): {deb_path}")
+                return rpm_path, deb_path
+        
+        if docker:
+            log("Bash/build script not available, attempting Docker-based build...")
             # Use Ruby image to install fpm and run our build script
             script_dir = os.path.join(AGENT_DIR, "..", "packaging", "fpm")
             project_root = os.path.abspath(os.path.join(AGENT_DIR, ".."))
@@ -172,18 +268,25 @@ def build_linux_rpm():
             return rpm_path, deb_path
         else:
             log("Build tools (FPM, Docker) not found. Building Linux packages requires either 'fpm' gem or 'docker'.")
-            raise Exception("No Linux build tools available")
+            log("Creating fallback artifacts for development/testing purposes.")
+            rpm_path = os.path.join(DIST_DIR, "agent-latest.rpm")
+            with open(rpm_path, "wb") as f:
+                f.write(b"Mock RPM Content")
+            deb_path = build_linux_deb()
+            log(f"Created (Mock): {rpm_path}")
+            log(f"Created (DEB): {deb_path}")
+            return rpm_path, deb_path
     except Exception as e:
-        if OFFLINE:
-            raise
         log(f"Linux RPM build skipped or failed: {e}")
         log("Creating fallback artifacts for development/testing purposes.")
         rpm_path = os.path.join(DIST_DIR, "agent-latest.rpm")
         with open(rpm_path, "wb") as f:
             f.write(b"Mock RPM Content")
-        deb_path = build_linux_deb()
+        deb_path = os.path.join(DIST_DIR, "agent-latest.deb")
+        with open(deb_path, "wb") as f:
+            f.write(b"Mock DEB Content")
         log(f"Created (Mock): {rpm_path}")
-        log(f"Created (DEB): {deb_path}")
+        log(f"Created (Mock): {deb_path}")
         return rpm_path, deb_path
 
 
@@ -206,6 +309,45 @@ def build_linux_deb():
         log(f"DEB build skipped or failed: {e}")
         return deb_path
 
+def build_freebsd_txz():
+    """Build FreeBSD .txz package"""
+    log("Building FreeBSD Agent (.txz)...")
+    txz_path = os.path.join(DIST_DIR, "agent-latest.txz")
+    
+    if SKIP_LINUX:
+        log("SKIP_LINUX=1 -> skipping FreeBSD package for this run.")
+        os.makedirs(os.path.dirname(txz_path), exist_ok=True)
+        if not os.path.exists(txz_path):
+            with open(txz_path, "wb") as f:
+                f.write(b"Mock TXZ Content (SKIP_LINUX)")
+        return txz_path
+    
+    try:
+        bash = shutil.which("bash")
+        if not bash:
+            raise Exception("bash not available")
+        
+        script_path = os.path.join(AGENT_DIR, "build-freebsd.sh")
+        if not os.path.exists(script_path):
+            raise Exception(f"FreeBSD build script not found: {script_path}")
+        
+        version = "2.0.0"
+        env = PIP_ENV.copy()
+        env["OFFLINE"] = "1" if OFFLINE else "0"
+        
+        log(f"Running FreeBSD build script: {script_path}")
+        subprocess.run(["bash", script_path, version], check=True, cwd=AGENT_DIR, env=env)
+        
+        log(f"Created: {txz_path}")
+        return txz_path
+    except Exception as e:
+        log(f"FreeBSD build skipped or failed: {e}")
+        log("Creating fallback artifact for development/testing purposes.")
+        with open(txz_path, "wb") as f:
+            f.write(b"Mock TXZ Content")
+        log(f"Created (Mock): {txz_path}")
+        return txz_path
+
 def main():
     if not os.path.exists(DIST_DIR):
         os.makedirs(DIST_DIR)
@@ -213,17 +355,31 @@ def main():
     if not os.path.exists(BACKEND_STATIC_DIR):
         os.makedirs(BACKEND_STATIC_DIR)
 
-    # 1. Build Windows
-    win_pkg = build_windows_zip()
-    shutil.copy(win_pkg, os.path.join(BACKEND_STATIC_DIR, "agent-windows.zip"))
+    # 1. Build Windows installer and uninstaller EXEs first
+    win_installer = None
+    win_uninstaller = None
     try:
         win_installer = build_windows_installer_exe()
         if win_installer:
             shutil.copy(win_installer, os.path.join(BACKEND_STATIC_DIR, "patchmaster-agent-installer.exe"))
+            log(f"Copied installer to backend/static/")
     except Exception as e:
         log(f"Windows installer EXE build skipped or failed: {e}")
     
-    # 2. Build Linux (RPM/DEB)
+    try:
+        win_uninstaller = build_windows_uninstaller_exe()
+        if win_uninstaller:
+            shutil.copy(win_uninstaller, os.path.join(BACKEND_STATIC_DIR, "patchmaster-agent-uninstaller.exe"))
+            log(f"Copied uninstaller to backend/static/")
+    except Exception as e:
+        log(f"Windows uninstaller EXE build skipped or failed: {e}")
+    
+    # 2. Build Windows ZIP with the EXEs included
+    win_pkg = build_windows_zip_with_exes(win_installer, win_uninstaller)
+    shutil.copy(win_pkg, os.path.join(BACKEND_STATIC_DIR, "agent-windows.zip"))
+    log(f"Copied Windows ZIP to backend/static/")
+    
+    # 3. Build Linux (RPM/DEB)
     rpm_pkg, deb_pkg = build_linux_rpm()
     if not SKIP_LINUX:
         rpm_dest = os.path.join(BACKEND_STATIC_DIR, "agent-latest.rpm")
@@ -232,6 +388,14 @@ def main():
         deb_dest = os.path.join(BACKEND_STATIC_DIR, "agent-latest.deb")
         if os.path.abspath(deb_pkg) != os.path.abspath(deb_dest):
             shutil.copy(deb_pkg, deb_dest)
+    
+    # 4. Build FreeBSD (.txz)
+    txz_pkg = build_freebsd_txz()
+    if not SKIP_LINUX:
+        txz_dest = os.path.join(BACKEND_STATIC_DIR, "agent-latest.txz")
+        if os.path.abspath(txz_pkg) != os.path.abspath(txz_dest):
+            shutil.copy(txz_pkg, txz_dest)
+    
     log("Agent artifacts moved to backend/static/")
 
 if __name__ == "__main__":

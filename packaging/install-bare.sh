@@ -835,7 +835,8 @@ fi
 FRONTEND_PORT=$(choose_port "${FRONTEND_PORT:-3000}" 3001 3080 8080 8888)
 BACKEND_PORT=$(choose_port "${BACKEND_PORT:-8000}" 8001 18000 19000)
 POSTGRES_USER="${POSTGRES_USER:-patchmaster}"
-POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-patchmaster}"
+# Generate secure password if not provided
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-$(python3 -c 'import secrets; print("PgPm!7" + secrets.token_hex(8))')}"
 POSTGRES_DB="${POSTGRES_DB:-patchmaster}"
 JWT_SECRET="${JWT_SECRET:-$(python3 -c 'import secrets; print(secrets.token_hex(32))')}"
 # Generate LICENSE_SIGN_KEY only for legacy shared-secret installs that do not
@@ -893,7 +894,8 @@ PROMETHEUS_PORT="${PROMETHEUS_PORT:-9090}"
 PM_PROMETHEUS_PROXY_PREFIX="${PM_PROMETHEUS_PROXY_PREFIX:-/api/monitoring/embed/prometheus/}"
 PM_GRAFANA_PROXY_PREFIX="${PM_GRAFANA_PROXY_PREFIX:-/api/monitoring/embed/grafana/}"
 GF_ADMIN_USER="${GF_ADMIN_USER:-admin}"
-GF_ADMIN_PASSWORD="${GF_ADMIN_PASSWORD:-patchmaster}"
+# Generate secure Grafana password if not provided
+GF_ADMIN_PASSWORD="${GF_ADMIN_PASSWORD:-$(python3 -c 'import secrets; print("GfA!7" + secrets.token_hex(8))')}"
 PROMETHEUS_RETENTION="${PROMETHEUS_RETENTION:-30d}"
 PM_MONITORING_PUBLIC_BASE_URL="${PM_MONITORING_PUBLIC_BASE_URL:-http://${SERVER_IP}:${BACKEND_PORT}}"
 PM_WINDOWS_WBADMIN_SMB_AUTO="${PM_WINDOWS_WBADMIN_SMB_AUTO:-1}"

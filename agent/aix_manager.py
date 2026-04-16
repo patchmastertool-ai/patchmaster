@@ -50,7 +50,7 @@ class AIXManager:
         try:
             with open("/etc/AIX", "r"):
                 return True
-        except:
+        except (IOError, OSError):
             pass
 
         # Check kernel via uname

@@ -369,7 +369,8 @@ def update_metrics_loop():
                     try:
                         usage = psutil.disk_usage(part.mountpoint).percent
                         disk_usage.labels(mountpoint=part.mountpoint).set(usage)
-                    except:
+                    except (OSError, PermissionError):
+                        # Disk may be unmounted or inaccessible
                         pass
             uptime_seconds.set(time.time() - psutil.boot_time())
         except Exception as e:
@@ -771,7 +772,7 @@ class WinManager(BasePackageManager):
                 {"name": d["Name"], "version": d["Version"], "status": "installed"}
                 for d in data
             ]
-        except:
+        except (json.JSONDecodeError, KeyError, TypeError):
             return []
 
     def list_upgradable(self):
@@ -1646,7 +1647,7 @@ def get_pkg_manager():
                     content = f.read().lower()
                     if "id=alpine" in content:
                         return ApkManager()
-            except:
+            except (IOError, OSError):
                 pass
 
     # Check for openSUSE (uses zypper)
@@ -1669,7 +1670,7 @@ def get_pkg_manager():
                         or "id=manjaro" in content
                     ):
                         return PacmanManager()
-            except:
+            except (IOError, OSError):
                 pass
 
     # Check for Amazon Linux (uses yum/dnf)
@@ -1683,7 +1684,7 @@ def get_pkg_manager():
                         return DnfManager()
                     elif os.path.exists("/usr/bin/yum"):
                         return DnfManager()  # DnfManager handles both yum and dnf
-        except:
+        except (IOError, OSError):
             pass
 
     # Standard detection
@@ -1716,9 +1717,9 @@ def _check_solaris() -> bool:
                     content = f.read().lower()
                     if "solaris" in content or "opensolaris" in content:
                         return True
-            except:
+            except (IOError, OSError):
                 pass
-    except:
+    except (IOError, OSError):
         pass
     return False
 
@@ -1738,7 +1739,7 @@ def _check_hpux() -> bool:
             return True
         if os.path.exists("/usr/sbin/swinstall"):
             return True
-    except:
+    except (IOError, OSError):
         pass
     return False
 
@@ -1758,7 +1759,7 @@ def _check_aix() -> bool:
             return True
         if os.path.exists("/usr/sbin/nimclient"):
             return True
-    except:
+    except (IOError, OSError):
         pass
     return False
 
@@ -1812,7 +1813,7 @@ def detect_package_manager():
                     content = f.read().lower()
                     if "id=alpine" in content:
                         return ("alpine", ApkManager())
-            except:
+            except (IOError, OSError):
                 pass
 
     if os.path.exists("/usr/bin/zypper"):
@@ -1831,7 +1832,7 @@ def detect_package_manager():
                         or "id=manjaro" in content
                     ):
                         return ("arch", PacmanManager())
-            except:
+            except (IOError, OSError):
                 pass
 
     if os.path.exists("/usr/bin/apt-get"):
@@ -3764,9 +3765,11 @@ def job_history():
                 for line in f:
                     try:
                         jobs.append(json.loads(line))
-                    except:
+                    except (json.JSONDecodeError, ValueError):
+                        # Skip malformed JSON lines
                         pass
-        except:
+        except (IOError, OSError):
+            # Log file may be locked or inaccessible
             pass
     return jsonify({"history": jobs[-100:][::-1]})
 
@@ -3859,7 +3862,8 @@ def restore_url():
     finally:
         try:
             os.remove(tmp_path)
-        except:
+        except OSError:
+            # File may have already been deleted or is in use
             pass
 
 

@@ -51,7 +51,7 @@ class HPUXManager:
                 content = f.read().lower()
                 if "hp-ux" in content or "hpux" in content:
                     return True
-        except:
+        except (IOError, OSError):
             pass
 
         # Check kernel via uname

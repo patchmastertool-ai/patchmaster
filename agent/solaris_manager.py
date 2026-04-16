@@ -49,7 +49,7 @@ class SolarisManager:
                 content = f.read().lower()
                 if "solaris" in content or "opensolaris" in content:
                     return True
-        except:
+        except (IOError, OSError):
             pass
 
         # Check kernel via uname
