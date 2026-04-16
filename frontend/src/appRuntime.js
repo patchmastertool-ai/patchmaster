@@ -2,15 +2,26 @@ import React from 'react';
 
 // Resolve API base for all environments (docker, bare-metal, proxy):
 // 1) VITE_API_URL if set.
-// 2) If running on port 3000, swap to 8000 on the same host.
-// 3) Otherwise use same origin.
+// 2) If behind nginx proxy, use same origin (nginx proxies /api/ to backend)
+// 3) If running on port 3000 in dev, swap to 8000 on the same host.
+// 4) Otherwise use same origin.
 const ENV_API = import.meta?.env?.VITE_API_URL;
 
 export const API = (() => {
   if (ENV_API) return ENV_API.replace(/\/$/, '');
   if (typeof window !== 'undefined' && window.location?.origin) {
-    const { origin } = window.location;
-    return origin.replace(/:(3000|4173|5173)$/, ':8000');
+    const { origin, port } = window.location;
+    // If accessed via standard HTTP/HTTPS ports (80/443) or nginx port (3000),
+    // use same origin - nginx will proxy /api/ requests to backend
+    if (port === '' || port === '80' || port === '443' || port === '3000') {
+      return origin;
+    }
+    // Development mode: if on port 5173 (Vite dev), connect to backend on 8000
+    if (port === '5173') {
+      return origin.replace(':5173', ':8000');
+    }
+    // Legacy: if somehow on port 3000 without nginx, try 8000
+    return origin.replace(/:(3000)$/, ':8000');
   }
   return '';
 })();
