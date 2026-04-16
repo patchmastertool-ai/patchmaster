@@ -1149,7 +1149,7 @@ class PatchRepo(Base):
 
     __tablename__ = "patch_repos"
     id = Column(Integer, primary_key=True)
-    name = Column(String(200), nullable=False, unique=True, index=True)
+    name = Column(String(200), nullable=False, unique=True)
     description = Column(Text, default="")
     repo_path = Column(
         String(500), nullable=False, unique=True
