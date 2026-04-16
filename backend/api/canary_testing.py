@@ -117,6 +117,62 @@ _policy_id_counter = 1
 _run_id_counter = 1
 
 
+async def _trigger_full_rollout(run_id: int):
+    """Trigger full rollout to all remaining hosts after successful canary.
+
+    Args:
+        run_id: Canary run ID that was promoted
+    """
+    global _canary_runs
+
+    run = _canary_runs.get(run_id)
+    if not run:
+        logger.warning(f"Cannot trigger rollout: run {run_id} not found")
+        return
+
+    policy = run["policy"]
+    all_hosts = run["hosts"]
+    canary_host_count = run.get("canary_hosts", 0)
+
+    # Get remaining hosts (exclude canary hosts)
+    remaining_hosts = all_hosts[canary_host_count:]
+
+    if not remaining_hosts:
+        logger.info(f"No remaining hosts for rollout in run {run_id}")
+        return
+
+    logger.info(
+        f"Triggering full rollout for run {run_id}: "
+        f"{len(remaining_hosts)} remaining hosts"
+    )
+
+    async with async_session() as db:
+        rollout_job_ids = []
+        for host in remaining_hosts:
+            try:
+                job = await _create_canary_job(
+                    host,
+                    policy.packages,
+                    policy.hold_packages,
+                    f"canary-rollout-{run_id}",
+                    db,
+                )
+                rollout_job_ids.append(job.id)
+            except Exception as e:
+                logger.error(f"Failed to create rollout job for host {host.id}: {e}")
+
+        await db.commit()
+
+        # Store rollout job IDs in run metadata
+        run["rollout_job_ids"] = rollout_job_ids
+        run["rollout_triggered_at"] = _utcnow()
+
+        logger.info(
+            f"Full rollout triggered for run {run_id}: "
+            f"{len(rollout_job_ids)} jobs created"
+        )
+
+
 async def _create_canary_job(
     host: Host,
     packages: list[str],
@@ -197,7 +253,8 @@ async def _monitor_canary_run(run_id: int):
             if policy.auto_promote:
                 run["status"] = CanaryStatus.PROMOTED
                 run["promoted_at"] = _utcnow()
-                # TODO: Trigger full rollout
+                # Trigger full rollout to remaining hosts
+                await _trigger_full_rollout(run_id)
             else:
                 run["status"] = CanaryStatus.MONITORING
         else:
