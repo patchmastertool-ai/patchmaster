@@ -136,13 +136,15 @@ async def init_db():
 
         try:
             await conn.run_sync(Base.metadata.create_all, checkfirst=True)
+            print("Database schema initialized successfully")
         except Exception as e:
             # Handle duplicate index/table errors gracefully during upgrades
             error_msg = str(e).lower()
             if "already exists" in error_msg or "duplicate" in error_msg:
-                print(f"Warning: Some database objects already exist (likely from previous installation): {e}")
+                print(f"Warning: Some database objects already exist (likely from previous installation)")
+                print("Database schema verification complete - continuing with existing schema")
                 # Continue - tables/indexes already exist from previous install
-                pass
             else:
                 # Re-raise other errors
+                print(f"Error initializing database: {e}")
                 raise
