@@ -471,11 +471,14 @@ if [[ "$DISTRO" == "debian" ]]; then
         fi
     fi
 
+    log "  Installing base packages (python3, nginx, curl, gcc, etc.)..."
     apt-get install -y -qq \
         python3 python3-venv python3-pip python3-dev \
         nginx curl gcc make rsync zip unzip openssl samba \
         > /dev/null 2>&1
+    log "  Base packages installed"
 
+    log "  Installing PostgreSQL..."
     # Prefer PostgreSQL 17 if available, otherwise install distro default
     if apt-cache show postgresql-17 >/dev/null 2>&1; then
         apt-get install -y -qq postgresql-17 postgresql-contrib-17 libpq-dev > /dev/null 2>&1 || true
@@ -483,6 +486,7 @@ if [[ "$DISTRO" == "debian" ]]; then
     if ! command -v psql >/dev/null 2>&1; then
         apt-get install -y -qq postgresql postgresql-contrib libpq-dev > /dev/null 2>&1
     fi
+    log "  PostgreSQL installed"
 
     if [[ -f "$PROJECT_ROOT/frontend/dist/index.html" ]]; then
         if [[ "${SKIP_FRONTEND_E2E:-0}" == "1" ]]; then
