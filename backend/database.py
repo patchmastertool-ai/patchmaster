@@ -134,4 +134,15 @@ async def init_db():
     async with db_engine.begin() as conn:
         from models import db_models  # noqa: F401
 
-        await conn.run_sync(Base.metadata.create_all, checkfirst=True)
+        try:
+            await conn.run_sync(Base.metadata.create_all, checkfirst=True)
+        except Exception as e:
+            # Handle duplicate index/table errors gracefully during upgrades
+            error_msg = str(e).lower()
+            if "already exists" in error_msg or "duplicate" in error_msg:
+                print(f"Warning: Some database objects already exist (likely from previous installation): {e}")
+                # Continue - tables/indexes already exist from previous install
+                pass
+            else:
+                # Re-raise other errors
+                raise
