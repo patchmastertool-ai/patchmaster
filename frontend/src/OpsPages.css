@@ -182,7 +182,7 @@
   .ops-hero-main { padding: 16px; }
   .ops-hero-row { flex-direction: column; gap: 12px; }
   .ops-hero-emphasis { padding: 12px; min-width: auto; }
-  .ops-emphasis-value { fontSize: 26px; }
+  .ops-emphasis-value { font-size: 26px; }
   .ops-hero-copy h3 { font-size: 20px; }
   .ops-hero-copy p { font-size: 13px; }
   .ops-summary-grid { grid-template-columns: 1fr; }
