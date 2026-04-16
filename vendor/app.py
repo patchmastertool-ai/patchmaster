@@ -10,6 +10,7 @@ Usage:
     # Production (via Gunicorn)
     gunicorn app:app --bind 0.0.0.0:5050 --workers 2
 """
+
 import base64
 import hashlib
 import hmac
@@ -27,13 +28,23 @@ from argon2 import PasswordHasher, exceptions
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric.x25519 import (
+    X25519PrivateKey,
+    X25519PublicKey,
+)
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from flask import (
-    Flask, render_template, request, redirect, url_for,
-    flash, jsonify, session, g,
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    jsonify,
+    session,
+    g,
 )
 from flask_wtf.csrf import CSRFProtect
 
@@ -41,6 +52,7 @@ from flask_wtf.csrf import CSRFProtect
 try:
     from flask_limiter import Limiter
     from flask_limiter.util import get_remote_address
+
     _LIMITER_AVAILABLE = True
 except ImportError:
     _LIMITER_AVAILABLE = False
@@ -64,13 +76,136 @@ PLACEHOLDER_VALUES = {
 # ── Startup guard: block insecure default credentials ──────────
 _RAW_ADMIN_PASS = os.environ.get("CM_ADMIN_PASS", "")
 _WEAK_PASSWORDS = {
-    "", "admin123", "admin", "changeme", "password", "1234", "12345", "123456",
-    "password123", "admin1", "root", "toor", "pass", "test", "guest", "user",
-    "default", "letmein", "welcome", "qwerty", "abc123", "monkey", "dragon",
-    "master", "sunshine", "princess", "football", "shadow", "michael", "jennifer"
+    "",
+    "1234",
+    "12345",
+    "123456",
+    "1234567",
+    "12345678",
+    "123456789",
+    "1234567890",
+    "password",
+    "password123",
+    "password1",
+    "password1234",
+    "P@ssword",
+    "P@ssw0rd",
+    "P@55w0rd",
+    "admin",
+    "admin123",
+    "admin1",
+    "administrator",
+    "administrator123",
+    "root",
+    "toor",
+    "root123",
+    "root1234",
+    "changeme",
+    "changeme123",
+    "changeit",
+    "changepass",
+    "guest",
+    "user",
+    "test",
+    "test123",
+    "demo",
+    "demo123",
+    "default",
+    "letmein",
+    "welcome",
+    "welcome123",
+    "qwerty",
+    "qwerty123",
+    "abc123",
+    "abc1234",
+    "abcd1234",
+    "monkey",
+    "dragon",
+    "master",
+    "master123",
+    "sunshine",
+    "princess",
+    "football",
+    "shadow",
+    "michael",
+    "jennifer",
+    "iloveyou",
+    "trustno1",
+    "access",
+    "access123",
+    "pass",
+    "pass123",
+    "pass1234",
+    "pa55w0rd",
+    "111111",
+    "222222",
+    "333333",
+    "444444",
+    "555555",
+    "666666",
+    "777777",
+    "888888",
+    "999999",
+    "000000",
+    "aaaaaa",
+    "bbbbbb",
+    "cccccc",
+    "dddddd",
+    "eeeeee",
+    "ffffff",
+    "aaaaaa",
+    "1111aaaa",
+    "1q2w3e",
+    "1q2w3e4r",
+    "1q2w3e4r5t",
+    "zaq12wsx",
+    "q1w2e3r4",
+    "1qaz2wsx",
+    "qazwsx",
+    "love",
+    "lover",
+    "lovely",
+    "secret",
+    "secret123",
+    "server",
+    "server123",
+    "database",
+    "database123",
+    "welcome1",
+    "welcome123",
+    "welcome2024",
+    "welcome2025",
+    "winter",
+    "summer",
+    "spring",
+    "autumn",
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+    "computer",
+    "internet",
+    "network",
+    "security",
 }
 if _RAW_ADMIN_PASS in _WEAK_PASSWORDS:
     import sys as _sys
+
     _guard_log = logging.getLogger("vendor-portal")
     _guard_log.critical(
         "STARTUP BLOCKED: CM_ADMIN_PASS is not set or uses a weak default value '%s'. "
@@ -84,7 +219,6 @@ if _RAW_ADMIN_PASS in _WEAK_PASSWORDS:
         )
 
 
-
 class Catalog(dict):
     """Dictionary with a safe fallback for legacy DB values."""
 
@@ -95,7 +229,10 @@ class Catalog(dict):
     def __missing__(self, key):
         value = self._fallback_factory(key)
         self[key] = value
-        logger.warning("Vendor portal encountered unknown catalog key '%s'; using fallback metadata.", key)
+        logger.warning(
+            "Vendor portal encountered unknown catalog key '%s'; using fallback metadata.",
+            key,
+        )
         return value
 
 
@@ -165,6 +302,7 @@ def _load_setting(key):
             return value
     return ""
 
+
 # ── Logging ────────────────────────────────────────────────────
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -183,15 +321,18 @@ if _LIMITER_AVAILABLE:
     limiter = Limiter(
         get_remote_address,
         app=app,
-        default_limits=[],        # no global limit; applied per-route only
+        default_limits=[],  # no global limit; applied per-route only
         storage_uri="memory://",  # swap for Redis URI in production
     )
 else:
+
     class _NoOpLimiter:
         def limit(self, *a, **kw):
             def decorator(f):
                 return f
+
             return decorator
+
     limiter = _NoOpLimiter()
 
 
@@ -207,8 +348,10 @@ app.config.update(
 if os.environ.get("HTTPS_ENABLED", "").lower() == "true":
     app.config["SESSION_COOKIE_SECURE"] = True
 
-DATABASE_URL = os.environ.get("CM_DATABASE_URL",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "customers.db"))
+DATABASE_URL = os.environ.get(
+    "CM_DATABASE_URL",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "customers.db"),
+)
 
 SCHEMA_COLUMNS = {
     "customers": {
@@ -380,7 +523,9 @@ DEFAULT_SIGN_KEY = _load_setting("LICENSE_SIGN_KEY")
 DEFAULT_SIGN_PRIVATE_KEY = _load_setting("LICENSE_SIGN_PRIVATE_KEY")
 DEFAULT_VERIFY_PUBLIC_KEY = _load_setting("LICENSE_VERIFY_PUBLIC_KEY")
 DEFAULT_ENCRYPT_PUBLIC_KEY = _load_setting("LICENSE_ENCRYPT_PUBLIC_KEY")
-DEFAULT_ENABLE_ACTIVATION_CALLBACK = _load_setting("PM_VENDOR_ENABLE_ACTIVATION_CALLBACK").lower() in {"1", "true", "yes", "on"}
+DEFAULT_ENABLE_ACTIVATION_CALLBACK = _load_setting(
+    "PM_VENDOR_ENABLE_ACTIVATION_CALLBACK"
+).lower() in {"1", "true", "yes", "on"}
 if not DEFAULT_SIGN_PRIVATE_KEY and not DEFAULT_SIGN_KEY:
     raise RuntimeError(
         "No vendor signing material is configured. "
@@ -407,9 +552,13 @@ def _derive_public_key(private_key):
     if not private_bytes:
         return ""
     try:
-        public_bytes = Ed25519PrivateKey.from_private_bytes(private_bytes).public_key().public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw,
+        public_bytes = (
+            Ed25519PrivateKey.from_private_bytes(private_bytes)
+            .public_key()
+            .public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw,
+            )
         )
         return base64.urlsafe_b64encode(public_bytes).decode().rstrip("=")
     except Exception:
@@ -436,8 +585,12 @@ def _sign_license_payload(message, sign_key, private_key):
         signature = signer.sign(message.encode()).hex()
         return signature, "ed25519"
     if not sign_key:
-        raise RuntimeError("No signing secret or private key is configured for vendor license generation.")
-    signature = hmac.new(sign_key.encode(), message.encode(), hashlib.sha256).hexdigest()
+        raise RuntimeError(
+            "No signing secret or private key is configured for vendor license generation."
+        )
+    signature = hmac.new(
+        sign_key.encode(), message.encode(), hashlib.sha256
+    ).hexdigest()
     return signature, "hmac-sha256"
 
 
@@ -451,15 +604,19 @@ def _derive_pm2_aead_key(shared_secret):
 
 
 def _encode_json_b64(value):
-    return base64.urlsafe_b64encode(
-        json.dumps(value, separators=(",", ":")).encode()
-    ).decode().rstrip("=")
+    return (
+        base64.urlsafe_b64encode(json.dumps(value, separators=(",", ":")).encode())
+        .decode()
+        .rstrip("=")
+    )
 
 
 def _build_pm2_license(payload, sign_key, private_key, encrypt_public_key):
     public_bytes = _decode_key_bytes(encrypt_public_key)
     if not public_bytes:
-        raise RuntimeError("Invalid LICENSE_ENCRYPT_PUBLIC_KEY for PM2 license generation.")
+        raise RuntimeError(
+            "Invalid LICENSE_ENCRYPT_PUBLIC_KEY for PM2 license generation."
+        )
     recipient = X25519PublicKey.from_public_bytes(public_bytes)
     ephemeral_private = X25519PrivateKey.generate()
     ephemeral_public = ephemeral_private.public_key().public_bytes(
@@ -476,7 +633,9 @@ def _build_pm2_license(payload, sign_key, private_key, encrypt_public_key):
         "enc_alg": "x25519-aes256gcm",
     }
     header_b64 = _encode_json_b64(header)
-    ciphertext = AESGCM(aead_key).encrypt(nonce, json.dumps(payload, separators=(",", ":")).encode(), header_b64.encode())
+    ciphertext = AESGCM(aead_key).encrypt(
+        nonce, json.dumps(payload, separators=(",", ":")).encode(), header_b64.encode()
+    )
     envelope = {
         "epk": base64.urlsafe_b64encode(ephemeral_public).decode().rstrip("="),
         "nonce": base64.urlsafe_b64encode(nonce).decode().rstrip("="),
@@ -484,10 +643,13 @@ def _build_pm2_license(payload, sign_key, private_key, encrypt_public_key):
     }
     envelope_b64 = _encode_json_b64(envelope)
     signed_message = f"{header_b64}.{envelope_b64}"
-    signature, payload["sig_alg"] = _sign_license_payload(signed_message, sign_key, private_key)
+    signature, payload["sig_alg"] = _sign_license_payload(
+        signed_message, sign_key, private_key
+    )
     payload["enc_alg"] = header["enc_alg"]
     payload["license_format"] = "PM2"
     return f"PM2-{signed_message}.{signature}", payload
+
 
 # ── License Plans: durations + base pricing per host/year ──────
 # Pricing benchmarked against Ansible Automation Platform (~$14/node/yr),
@@ -496,12 +658,47 @@ def _build_pm2_license(payload, sign_key, private_key, encrypt_public_key):
 PLANS = Catalog(
     {
         # ── Free evaluation plans (no charge, limited binding) ──
-        "poc":      {"days": 14,   "label": "POC (14 Days)",    "price_per_host_yr": 0,    "no_bind": True,  "discount": 0.00, "price": 0},
-        "testing":  {"days": 30,   "label": "Testing (30 Days)","price_per_host_yr": 0,    "no_bind": True,  "discount": 0.00, "price": 0},
+        "poc": {
+            "days": 14,
+            "label": "POC (14 Days)",
+            "price_per_host_yr": 0,
+            "no_bind": True,
+            "discount": 0.00,
+            "price": 0,
+        },
+        "testing": {
+            "days": 30,
+            "label": "Testing (30 Days)",
+            "price_per_host_yr": 0,
+            "no_bind": True,
+            "discount": 0.00,
+            "price": 0,
+        },
         # ── Commercial plans ────────────────────────────────────
-        "annual":   {"days": 365,  "label": "1-Year License",  "price_per_host_yr": 9.00,  "no_bind": False, "discount": 0.00, "price": 9.00},
-        "3year":    {"days": 1095, "label": "3-Year License",  "price_per_host_yr": 8.10,  "no_bind": False, "discount": 0.10, "price": 8.10},  # 10% off
-        "5year":    {"days": 1825, "label": "5-Year License",  "price_per_host_yr": 7.20,  "no_bind": False, "discount": 0.20, "price": 7.20},  # 20% off
+        "annual": {
+            "days": 365,
+            "label": "1-Year License",
+            "price_per_host_yr": 9.00,
+            "no_bind": False,
+            "discount": 0.00,
+            "price": 9.00,
+        },
+        "3year": {
+            "days": 1095,
+            "label": "3-Year License",
+            "price_per_host_yr": 8.10,
+            "no_bind": False,
+            "discount": 0.10,
+            "price": 8.10,
+        },  # 10% off
+        "5year": {
+            "days": 1825,
+            "label": "5-Year License",
+            "price_per_host_yr": 7.20,
+            "no_bind": False,
+            "discount": 0.20,
+            "price": 7.20,
+        },  # 20% off
     },
     fallback_factory=lambda key: {
         "days": 365,
@@ -512,27 +709,47 @@ PLANS = Catalog(
     },
 )
 
+
 # ── Helper: compute license total amount ───────────────────────
 def compute_license_amount(tier_key, plan_key, max_hosts):
     """Return total USD amount for a given tier + plan + host count."""
-    plan   = PLANS[plan_key]
-    tier   = TIERS[tier_key]
-    hosts  = max(1, max_hosts or tier.get("default_hosts", 10))
-    years  = max(1, round(plan["days"] / 365, 2))
-    base   = plan["price_per_host_yr"] * tier["price_mult"] * hosts * years
-    total  = round(base * (1 - plan["discount"]), 2)
+    plan = PLANS[plan_key]
+    tier = TIERS[tier_key]
+    hosts = max(1, max_hosts or tier.get("default_hosts", 10))
+    years = max(1, round(plan["days"] / 365, 2))
+    base = plan["price_per_host_yr"] * tier["price_mult"] * hosts * years
+    total = round(base * (1 - plan["discount"]), 2)
     return total
+
 
 # ── Feature catalogs ───────────────────────────────────────────
 CORE_FEATURES = [
-    "dashboard", "hosts", "groups", "patches", "snapshots",
-    "compare", "offline", "schedules", "jobs", "onboarding",
-    "settings", "license", "linux_patching",
+    "dashboard",
+    "hosts",
+    "groups",
+    "patches",
+    "snapshots",
+    "compare",
+    "offline",
+    "schedules",
+    "jobs",
+    "onboarding",
+    "settings",
+    "license",
+    "linux_patching",
 ]
 
 STANDARD_ADDONS = [
-    "compliance", "cve", "audit", "notifications", "users",
-    "local-repo", "monitoring", "wsus", "reports", "software",
+    "compliance",
+    "cve",
+    "audit",
+    "notifications",
+    "users",
+    "local-repo",
+    "monitoring",
+    "wsus",
+    "reports",
+    "software",
     "windows_patching",
 ]
 
@@ -540,10 +757,15 @@ DEVOPS_ADDONS = ["cicd", "git", "monitoring", "testing", "policies"]
 
 BACKUP_ADDONS = ["backup_db", "backup_file", "backup_vm", "backup_live", "backups"]
 
-ALL_FEATURES = sorted(set(
-    CORE_FEATURES + STANDARD_ADDONS + DEVOPS_ADDONS + BACKUP_ADDONS +
-    ["ring_rollout", "network_boot", "provisioning", "runbooks", "sla_drills"]
-))
+ALL_FEATURES = sorted(
+    set(
+        CORE_FEATURES
+        + STANDARD_ADDONS
+        + DEVOPS_ADDONS
+        + BACKUP_ADDONS
+        + ["ring_rollout", "network_boot", "provisioning", "runbooks", "sla_drills"]
+    )
+)
 
 TIERS = Catalog(
     {
@@ -551,7 +773,7 @@ TIERS = Catalog(
         "basic": {
             "label": "Basic",
             "description": "Core patching for up to 10 hosts — Linux focus",
-            "price_mult": 1.0,      # $9.00/host/yr
+            "price_mult": 1.0,  # $9.00/host/yr
             "features": CORE_FEATURES[:],
             "default_hosts": 10,
             "smart_features": [
@@ -566,7 +788,7 @@ TIERS = Catalog(
         "basic_devops": {
             "label": "Basic + DevOps",
             "description": "Basic tier + CI/CD pipelines & monitoring (10 Hosts)",
-            "price_mult": 1.5,      # $13.50/host/yr
+            "price_mult": 1.5,  # $13.50/host/yr
             "features": CORE_FEATURES + DEVOPS_ADDONS,
             "default_hosts": 10,
             "smart_features": [
@@ -582,7 +804,7 @@ TIERS = Catalog(
         "standard": {
             "label": "Standard",
             "description": "Enterprise essentials for up to 100 hosts",
-            "price_mult": 2.5,      # $22.50/host/yr
+            "price_mult": 2.5,  # $22.50/host/yr
             "features": CORE_FEATURES + STANDARD_ADDONS,
             "default_hosts": 100,
             "smart_features": [
@@ -601,7 +823,7 @@ TIERS = Catalog(
         "standard_devops": {
             "label": "Standard + DevOps",
             "description": "Standard + CI/CD & full DevOps pipeline (100 Hosts)",
-            "price_mult": 3.0,      # $27.00/host/yr
+            "price_mult": 3.0,  # $27.00/host/yr
             "features": CORE_FEATURES + STANDARD_ADDONS + DEVOPS_ADDONS + BACKUP_ADDONS,
             "default_hosts": 100,
             "smart_features": [
@@ -617,9 +839,9 @@ TIERS = Catalog(
         "enterprise": {
             "label": "Enterprise",
             "description": "All features unlocked — unlimited hosts & scale",
-            "price_mult": 5.0,      # $45.00/host/yr
+            "price_mult": 5.0,  # $45.00/host/yr
             "features": ALL_FEATURES[:],
-            "default_hosts": 0,     # 0 = unlimited
+            "default_hosts": 0,  # 0 = unlimited
             "smart_features": [
                 "Everything in Standard + DevOps",
                 "Unlimited managed hosts",
@@ -649,17 +871,22 @@ class DatabaseWrapper:
     def __init__(self, conn):
         self.conn = conn
         self.conn.row_factory = sqlite3.Row
+
     def execute(self, query, params=()):
         cur = self.conn.cursor()
         cur.execute(query, params)
         return cur
+
     def executescript(self, script):
         cur = self.conn.cursor()
         cur.executescript(script)
+
     def commit(self):
         self.conn.commit()
+
     def close(self):
         self.conn.close()
+
 
 def get_db():
     if "db" not in g:
@@ -691,7 +918,9 @@ def inject_now():
 
 
 def ensure_table_columns(db, table_name, columns):
-    existing = {row["name"] for row in db.execute(f"PRAGMA table_info({table_name})").fetchall()}
+    existing = {
+        row["name"] for row in db.execute(f"PRAGMA table_info({table_name})").fetchall()
+    }
     for column_name, definition in columns.items():
         if column_name in existing:
             continue
@@ -702,7 +931,9 @@ def ensure_table_columns(db, table_name, columns):
 def ensure_schema(db):
     existing_tables = {
         row[0]
-        for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        for row in db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
     }
     required_tables = set(SCHEMA_COLUMNS)
     missing_tables = sorted(required_tables - existing_tables)
@@ -715,16 +946,18 @@ def ensure_schema(db):
         db.executescript(SCHEMA_SQL)
         existing_tables = {
             row[0]
-            for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            for row in db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
         }
     for table_name, columns in SCHEMA_COLUMNS.items():
         if table_name not in existing_tables:
             continue
         ensure_table_columns(db, table_name, columns)
-    
+
     # Bootstrap default admin if first run
     _ensure_default_admin(db)
-    
+
     db.commit()
 
 
@@ -735,6 +968,7 @@ def init_db():
     ensure_schema(db)
     db.close()
     logger.info("Database initialized at %s", DATABASE_URL)
+
 
 def log_activity(action, entity_type="", entity_id=None, details="", commit=True):
     db = get_db()
@@ -790,17 +1024,22 @@ def handle_internal_error(error):
 def activation_callback():
     """Legacy-only activation callback. Manual vendor records are authoritative."""
     if not DEFAULT_ENABLE_ACTIVATION_CALLBACK:
-        return jsonify({"status": "ignored", "message": "Activation callback is disabled by policy"}), 202
+        return jsonify(
+            {
+                "status": "ignored",
+                "message": "Activation callback is disabled by policy",
+            }
+        ), 202
 
     data = request.get_json(silent=True) or {}
     license_id = data.get("license_id")
     hw_id = data.get("hw_id")
-    
+
     if not license_id:
         return jsonify({"status": "error", "message": "Missing license_id"}), 400
-        
+
     db = get_db()
-    
+
     # Check if license exists
     lic = db.execute(
         "SELECT id, activated, hw_id, plan FROM licenses WHERE license_id = ?",
@@ -817,24 +1056,32 @@ def activation_callback():
             db.execute("UPDATE licenses SET hw_id = ? WHERE id = ?", (hw_id, lic["id"]))
             db.commit()
         return jsonify({"status": "success", "message": "Already activated"})
-        
+
     # Mark as activated
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    
+
     # Keep testing/POC licenses portable; only bind hardware for plans that require it.
     final_hw_id = lic["hw_id"] if bind_hw_id else ""
     if bind_hw_id and not final_hw_id and hw_id:
         final_hw_id = hw_id
-        
-    db.execute("""
+
+    db.execute(
+        """
         UPDATE licenses 
         SET activated = 1, activated_at = ?, hw_id = ?
         WHERE id = ?
-    """, (now, final_hw_id, lic["id"]))
-    
-    log_activity("license_activated", "license", lic["id"], f"License {license_id} activated remotely (HW: {final_hw_id})")
+    """,
+        (now, final_hw_id, lic["id"]),
+    )
+
+    log_activity(
+        "license_activated",
+        "license",
+        lic["id"],
+        f"License {license_id} activated remotely (HW: {final_hw_id})",
+    )
     db.commit()
-    
+
     return jsonify({"status": "success", "activated_at": now})
 
 
@@ -852,7 +1099,9 @@ def generate_license_key(
     encrypt_public_key=None,
 ):
     """Generate a signed PatchMaster license key. Returns (key, payload)."""
-    sign_key, private_key, public_key = _resolve_signing_material(sign_key, private_key, public_key)
+    sign_key, private_key, public_key = _resolve_signing_material(
+        sign_key, private_key, public_key
+    )
     encrypt_public_key = _resolve_encrypt_public_key(encrypt_public_key)
     plan_cfg = PLANS[plan]
     effective_tier = tier if tier in TIERS else "enterprise"
@@ -863,7 +1112,7 @@ def generate_license_key(
 
     if not no_bind and not hw_id:
         raise RuntimeError("Hardware ID is required for bound/final licenses.")
-    
+
     # Use tier default if max_hosts not provided
     if max_hosts is None:
         max_hosts = TIERS[effective_tier].get("default_hosts", 0)
@@ -896,10 +1145,14 @@ def generate_license_key(
         payload["activation_url"] = activation_url
 
     if encrypt_public_key:
-        key, payload = _build_pm2_license(payload, sign_key, private_key, encrypt_public_key)
+        key, payload = _build_pm2_license(
+            payload, sign_key, private_key, encrypt_public_key
+        )
     else:
         payload_b64 = _encode_json_b64(payload)
-        signature, payload["sig_alg"] = _sign_license_payload(payload_b64, sign_key, private_key)
+        signature, payload["sig_alg"] = _sign_license_payload(
+            payload_b64, sign_key, private_key
+        )
         payload["license_format"] = "PM1"
         key = f"PM1-{payload_b64}.{signature}"
     return key, payload
@@ -922,7 +1175,9 @@ def _check_password(stored: str, provided: str) -> bool:
     if ":" not in stored:
         return False
     salt, h = stored.split(":", 1)
-    return hmac.compare_digest(h, hashlib.sha256((salt + provided).encode()).hexdigest())
+    return hmac.compare_digest(
+        h, hashlib.sha256((salt + provided).encode()).hexdigest()
+    )
 
 
 def _ensure_default_admin(db):
@@ -938,7 +1193,9 @@ def _ensure_default_admin(db):
 
 
 def _get_portal_user(db, username: str):
-    return db.execute("SELECT * FROM portal_users WHERE username=?", (username,)).fetchone()
+    return db.execute(
+        "SELECT * FROM portal_users WHERE username=?", (username,)
+    ).fetchone()
 
 
 def login_required(f):
@@ -947,11 +1204,13 @@ def login_required(f):
         if not session.get("logged_in"):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
+
     return decorated
 
 
 def admin_required(f):
     """Decorator: requires logged-in user with role='admin'."""
+
     @wraps(f)
     def decorated(*args, **kwargs):
         if not session.get("logged_in"):
@@ -960,6 +1219,7 @@ def admin_required(f):
             flash("Admin access required.", "danger")
             return redirect(url_for("dashboard"))
         return f(*args, **kwargs)
+
     return decorated
 
 
@@ -972,13 +1232,22 @@ def login():
         db = get_db()
         _ensure_default_admin(db)
         user = _get_portal_user(db, username)
-        if user and user["is_active"] and _check_password(user["password_hash"], password):
+        if (
+            user
+            and user["is_active"]
+            and _check_password(user["password_hash"], password)
+        ):
             session["logged_in"] = True
             session["user"] = username
             session["role"] = user["role"]
             session["user_id"] = user["id"]
             session.permanent = True
-            logger.info("Portal login: %s (%s) from %s", username, user["role"], request.remote_addr)
+            logger.info(
+                "Portal login: %s (%s) from %s",
+                username,
+                user["role"],
+                request.remote_addr,
+            )
             flash("Logged in successfully.", "success")
             return redirect(url_for("dashboard"))
         logger.warning("Failed login for '%s' from %s", username, request.remote_addr)
@@ -994,6 +1263,7 @@ def logout():
 
 
 # ── Portal User Management ─────────────────────────────────────
+
 
 @app.route("/users")
 @admin_required
@@ -1016,7 +1286,9 @@ def user_new():
         if role not in ("admin", "viewer"):
             role = "viewer"
         db = get_db()
-        if db.execute("SELECT id FROM portal_users WHERE username=?", (username,)).fetchone():
+        if db.execute(
+            "SELECT id FROM portal_users WHERE username=?", (username,)
+        ).fetchone():
             flash("Username already exists.", "danger")
             return render_template("user_form.html", user=None)
         db.execute(
@@ -1024,7 +1296,12 @@ def user_new():
             (username, _hash_password(password), role),
         )
         db.commit()
-        log_activity("portal_user.created", "portal_user", None, f"Created portal user: {username} ({role})")
+        log_activity(
+            "portal_user.created",
+            "portal_user",
+            None,
+            f"Created portal user: {username} ({role})",
+        )
         flash(f"User '{username}' created.", "success")
         return redirect(url_for("users_list"))
     return render_template("user_form.html", user=None)
@@ -1046,7 +1323,8 @@ def user_edit(uid):
         # Prevent removing the last admin
         if role != "admin" or not is_active:
             admin_count = db.execute(
-                "SELECT COUNT(*) FROM portal_users WHERE role='admin' AND is_active=1 AND id!=?", (uid,)
+                "SELECT COUNT(*) FROM portal_users WHERE role='admin' AND is_active=1 AND id!=?",
+                (uid,),
             ).fetchone()[0]
             if admin_count == 0:
                 flash("Cannot demote or deactivate the last active admin.", "danger")
@@ -1056,8 +1334,12 @@ def user_edit(uid):
             (role, is_active, uid),
         )
         db.commit()
-        log_activity("portal_user.updated", "portal_user", uid,
-                     f"Updated portal user: {user['username']} role={role} active={is_active}")
+        log_activity(
+            "portal_user.updated",
+            "portal_user",
+            uid,
+            f"Updated portal user: {user['username']} role={role} active={is_active}",
+        )
         flash("User updated.", "success")
         return redirect(url_for("users_list"))
     return render_template("user_form.html", user=user)
@@ -1077,14 +1359,20 @@ def user_delete(uid):
     # Prevent deleting the last admin
     if user["role"] == "admin":
         admin_count = db.execute(
-            "SELECT COUNT(*) FROM portal_users WHERE role='admin' AND is_active=1 AND id!=?", (uid,)
+            "SELECT COUNT(*) FROM portal_users WHERE role='admin' AND is_active=1 AND id!=?",
+            (uid,),
         ).fetchone()[0]
         if admin_count == 0:
             flash("Cannot delete the last active admin.", "danger")
             return redirect(url_for("users_list"))
     db.execute("DELETE FROM portal_users WHERE id=?", (uid,))
     db.commit()
-    log_activity("portal_user.deleted", "portal_user", uid, f"Deleted portal user: {user['username']}")
+    log_activity(
+        "portal_user.deleted",
+        "portal_user",
+        uid,
+        f"Deleted portal user: {user['username']}",
+    )
     flash(f"User '{user['username']}' deleted.", "warning")
     return redirect(url_for("users_list"))
 
@@ -1103,7 +1391,9 @@ def change_password():
             flash("New passwords do not match.", "danger")
             return render_template("change_password.html")
         db = get_db()
-        user = db.execute("SELECT * FROM portal_users WHERE id=?", (session["user_id"],)).fetchone()
+        user = db.execute(
+            "SELECT * FROM portal_users WHERE id=?", (session["user_id"],)
+        ).fetchone()
         if not user or not _check_password(user["password_hash"], current):
             flash("Current password is incorrect.", "danger")
             return render_template("change_password.html")
@@ -1112,14 +1402,19 @@ def change_password():
             (_hash_password(new_pw), session["user_id"]),
         )
         db.commit()
-        log_activity("portal_user.password_changed", "portal_user", session["user_id"],
-                     f"Password changed for: {session['user']}")
+        log_activity(
+            "portal_user.password_changed",
+            "portal_user",
+            session["user_id"],
+            f"Password changed for: {session['user']}",
+        )
         flash("Password changed successfully.", "success")
         return redirect(url_for("dashboard"))
     return render_template("change_password.html")
 
 
 # ── Deleted Customers ──────────────────────────────────────────
+
 
 @app.route("/customers/deleted")
 @login_required
@@ -1137,13 +1432,21 @@ def deleted_customers():
     # Fetch licenses for each deleted customer
     customer_licenses = {}
     for row in rows:
-        lics = db.execute("""
+        lics = db.execute(
+            """
             SELECT license_id, tier, plan, expires_at, is_revoked, issued_at
             FROM licenses WHERE customer_id=? ORDER BY created_at DESC
-        """, (row["id"],)).fetchall()
+        """,
+            (row["id"],),
+        ).fetchall()
         customer_licenses[row["id"]] = lics
-    return render_template("deleted_customers.html", customers=rows,
-                           customer_licenses=customer_licenses, tiers=TIERS, plans=PLANS)
+    return render_template(
+        "deleted_customers.html",
+        customers=rows,
+        customer_licenses=customer_licenses,
+        tiers=TIERS,
+        plans=PLANS,
+    )
     return redirect(url_for("login"))
 
 
@@ -1154,13 +1457,23 @@ def dashboard():
     db = get_db()
     stats = {
         "total_customers": db.execute("SELECT COUNT(*) FROM customers").fetchone()[0],
-        "active_customers": db.execute("SELECT COUNT(*) FROM customers WHERE status='active'").fetchone()[0],
+        "active_customers": db.execute(
+            "SELECT COUNT(*) FROM customers WHERE status='active'"
+        ).fetchone()[0],
         "total_purchases": db.execute("SELECT COUNT(*) FROM purchases").fetchone()[0],
-        "total_revenue": db.execute("SELECT COALESCE(SUM(amount),0) FROM purchases WHERE status='completed'").fetchone()[0],
+        "total_revenue": db.execute(
+            "SELECT COALESCE(SUM(amount),0) FROM purchases WHERE status='completed'"
+        ).fetchone()[0],
         "total_licenses": db.execute("SELECT COUNT(*) FROM licenses").fetchone()[0],
-        "active_licenses": db.execute("SELECT COUNT(*) FROM licenses WHERE is_revoked=0 AND expires_at > CURRENT_TIMESTAMP").fetchone()[0],
-        "expired_licenses": db.execute("SELECT COUNT(*) FROM licenses WHERE is_revoked=0 AND expires_at <= CURRENT_TIMESTAMP").fetchone()[0],
-        "revoked_licenses": db.execute("SELECT COUNT(*) FROM licenses WHERE is_revoked=1").fetchone()[0],
+        "active_licenses": db.execute(
+            "SELECT COUNT(*) FROM licenses WHERE is_revoked=0 AND expires_at > CURRENT_TIMESTAMP"
+        ).fetchone()[0],
+        "expired_licenses": db.execute(
+            "SELECT COUNT(*) FROM licenses WHERE is_revoked=0 AND expires_at <= CURRENT_TIMESTAMP"
+        ).fetchone()[0],
+        "revoked_licenses": db.execute(
+            "SELECT COUNT(*) FROM licenses WHERE is_revoked=1"
+        ).fetchone()[0],
     }
     tier_dist = db.execute(
         "SELECT tier, COUNT(*) as cnt FROM licenses WHERE is_revoked=0 GROUP BY tier"
@@ -1173,9 +1486,15 @@ def dashboard():
         FROM purchases p JOIN customers c ON p.customer_id = c.id
         ORDER BY p.purchased_at DESC LIMIT 10
     """).fetchall()
-    return render_template("dashboard.html", stats=stats, tier_dist=tier_dist,
-                           recent=recent, recent_purchases=recent_purchases,
-                           tiers=TIERS, plans=PLANS)
+    return render_template(
+        "dashboard.html",
+        stats=stats,
+        tier_dist=tier_dist,
+        recent=recent,
+        recent_purchases=recent_purchases,
+        tiers=TIERS,
+        plans=PLANS,
+    )
 
 
 # ── Customers ──────────────────────────────────────────────────
@@ -1209,8 +1528,12 @@ def customers_list():
         query += " WHERE " + " AND ".join(wheres)
     query += " GROUP BY c.id ORDER BY c.created_at DESC"
     customers = db.execute(query, params).fetchall()
-    return render_template("customers.html", customers=customers, search=search,
-                           status_filter=status_filter)
+    return render_template(
+        "customers.html",
+        customers=customers,
+        search=search,
+        status_filter=status_filter,
+    )
 
 
 @app.route("/customers/new", methods=["GET", "POST"])
@@ -1231,11 +1554,17 @@ def customer_new():
         )
         db.commit()
         cust_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
-        log_activity("customer.created", "customer", cust_id,
-                     f"Created customer: {request.form['name'].strip()}")
+        log_activity(
+            "customer.created",
+            "customer",
+            cust_id,
+            f"Created customer: {request.form['name'].strip()}",
+        )
         flash("Customer created successfully.", "success")
         return redirect(url_for("customer_detail", cid=cust_id))
-    return render_template("customer_form.html", customer=None, tiers=TIERS, plans=PLANS)
+    return render_template(
+        "customer_form.html", customer=None, tiers=TIERS, plans=PLANS
+    )
 
 
 @app.route("/customers/<int:cid>")
@@ -1247,16 +1576,24 @@ def customer_detail(cid):
         flash("Customer not found.", "danger")
         return redirect(url_for("customers_list"))
     purchases = db.execute(
-        "SELECT * FROM purchases WHERE customer_id = ? ORDER BY purchased_at DESC", (cid,)
+        "SELECT * FROM purchases WHERE customer_id = ? ORDER BY purchased_at DESC",
+        (cid,),
     ).fetchall()
     licenses = db.execute(
         "SELECT * FROM licenses WHERE customer_id = ? ORDER BY created_at DESC", (cid,)
     ).fetchall()
-    licensed_purchase_ids = {row["purchase_id"] for row in licenses if row["purchase_id"]}
-    return render_template("customer_detail.html", customer=customer,
-                           purchases=purchases, licenses=licenses,
-                           tiers=TIERS, plans=PLANS,
-                           licensed_purchase_ids=licensed_purchase_ids)
+    licensed_purchase_ids = {
+        row["purchase_id"] for row in licenses if row["purchase_id"]
+    }
+    return render_template(
+        "customer_detail.html",
+        customer=customer,
+        purchases=purchases,
+        licenses=licenses,
+        tiers=TIERS,
+        plans=PLANS,
+        licensed_purchase_ids=licensed_purchase_ids,
+    )
 
 
 @app.route("/customers/<int:cid>/delete", methods=["POST"])
@@ -1280,9 +1617,15 @@ def customer_delete(cid):
         (cid,),
     )
     db.commit()
-    log_activity("customer.deleted", "customer", cid,
-                 f"Soft-deleted customer: {customer['name']} — existing licenses remain valid until expiry")
-    logger.info("Customer %s (id=%s) soft-deleted; licenses untouched", customer["name"], cid)
+    log_activity(
+        "customer.deleted",
+        "customer",
+        cid,
+        f"Soft-deleted customer: {customer['name']} — existing licenses remain valid until expiry",
+    )
+    logger.info(
+        "Customer %s (id=%s) soft-deleted; licenses untouched", customer["name"], cid
+    )
     flash(
         f"Customer '{customer['name']}' deleted. "
         "Existing license keys remain valid until their expiry date.",
@@ -1300,26 +1643,35 @@ def customer_edit(cid):
         flash("Customer not found.", "danger")
         return redirect(url_for("customers_list"))
     if request.method == "POST":
-        db.execute("""
+        db.execute(
+            """
             UPDATE customers SET name=?, email=?, company=?, phone=?, address=?,
                    notes=?, status=?, updated_at=CURRENT_TIMESTAMP
             WHERE id=?
-        """, (
-            request.form["name"].strip(),
-            request.form["email"].strip(),
-            request.form.get("company", "").strip(),
-            request.form.get("phone", "").strip(),
-            request.form.get("address", "").strip(),
-            request.form.get("notes", "").strip(),
-            request.form.get("status", "active"),
-            cid,
-        ))
+        """,
+            (
+                request.form["name"].strip(),
+                request.form["email"].strip(),
+                request.form.get("company", "").strip(),
+                request.form.get("phone", "").strip(),
+                request.form.get("address", "").strip(),
+                request.form.get("notes", "").strip(),
+                request.form.get("status", "active"),
+                cid,
+            ),
+        )
         db.commit()
-        log_activity("customer.updated", "customer", cid,
-                     f"Updated customer: {request.form['name'].strip()}")
+        log_activity(
+            "customer.updated",
+            "customer",
+            cid,
+            f"Updated customer: {request.form['name'].strip()}",
+        )
         flash("Customer updated.", "success")
         return redirect(url_for("customer_detail", cid=cid))
-    return render_template("customer_form.html", customer=customer, tiers=TIERS, plans=PLANS)
+    return render_template(
+        "customer_form.html", customer=customer, tiers=TIERS, plans=PLANS
+    )
 
 
 # ── Purchases ──────────────────────────────────────────────────
@@ -1356,9 +1708,15 @@ def purchases_list():
                 purchase_ids,
             ).fetchall()
         }
-    return render_template("purchases.html", purchases=purchases, tiers=TIERS,
-                           plans=PLANS, tier_filter=tier_filter, plan_filter=plan_filter,
-                           licensed_purchase_ids=licensed_purchase_ids)
+    return render_template(
+        "purchases.html",
+        purchases=purchases,
+        tiers=TIERS,
+        plans=PLANS,
+        tier_filter=tier_filter,
+        plan_filter=plan_filter,
+        licensed_purchase_ids=licensed_purchase_ids,
+    )
 
 
 @app.route("/purchases/new", methods=["GET", "POST"])
@@ -1385,7 +1743,9 @@ def purchase_new():
             flash("Select a valid customer before creating a purchase.", "danger")
             return redirect(url_for("purchase_new"))
 
-        customer = db.execute("SELECT * FROM customers WHERE id = ?", (customer_id,)).fetchone()
+        customer = db.execute(
+            "SELECT * FROM customers WHERE id = ?", (customer_id,)
+        ).fetchone()
         if not customer:
             flash("Customer not found.", "danger")
             return redirect(url_for("purchase_new"))
@@ -1393,32 +1753,63 @@ def purchase_new():
             flash("Invalid tier or plan.", "danger")
             return redirect(url_for("purchase_new"))
         if plan_requires_hw_id(plan) and not hw_id:
-            flash("Hardware MAC ID is required for this plan before generating the license.", "danger")
+            flash(
+                "Hardware MAC ID is required for this plan before generating the license.",
+                "danger",
+            )
             return redirect(url_for("purchase_new", cid=customer_id))
 
         try:
             db.execute("BEGIN")
-            effective_max_hosts = TIERS[tier].get("default_hosts", 0) if max_hosts is None else max_hosts
-            db.execute("""
+            effective_max_hosts = (
+                TIERS[tier].get("default_hosts", 0) if max_hosts is None else max_hosts
+            )
+            db.execute(
+                """
                 INSERT INTO purchases (customer_id, tier, plan, max_hosts, amount,
                                        currency, payment_method, payment_ref, notes)
                 VALUES (?,?,?,?,?,?,?,?,?)
-            """, (customer_id, tier, plan, effective_max_hosts, amount, "USD",
-                  payment_method, payment_ref, notes))
+            """,
+                (
+                    customer_id,
+                    tier,
+                    plan,
+                    effective_max_hosts,
+                    amount,
+                    "USD",
+                    payment_method,
+                    payment_ref,
+                    notes,
+                ),
+            )
             purchase_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
 
-            key, payload = generate_license_key(tier, plan, customer["name"], max_hosts, hw_id=hw_id)
-            db.execute("""
+            key, payload = generate_license_key(
+                tier, plan, customer["name"], max_hosts, hw_id=hw_id
+            )
+            db.execute(
+                """
                 INSERT INTO licenses (purchase_id, customer_id, license_id, license_key,
                                       tier, plan, features, max_hosts, hw_id, tool_version,
                                       version_compat, issued_at, expires_at)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (
-                purchase_id, customer_id, payload["license_id"], key,
-                payload["tier"], plan, json.dumps(payload["features"]),
-                payload["max_hosts"], payload.get("hw_id", ""), TOOL_VERSION, VERSION_COMPAT,
-                payload["issued_at"], payload["expires_at"],
-            ))
+            """,
+                (
+                    purchase_id,
+                    customer_id,
+                    payload["license_id"],
+                    key,
+                    payload["tier"],
+                    plan,
+                    json.dumps(payload["features"]),
+                    payload["max_hosts"],
+                    payload.get("hw_id", ""),
+                    TOOL_VERSION,
+                    VERSION_COMPAT,
+                    payload["issued_at"],
+                    payload["expires_at"],
+                ),
+            )
 
             log_activity(
                 "purchase.created",
@@ -1437,15 +1828,27 @@ def purchase_new():
             db.commit()
         except Exception:
             db.rollback()
-            logger.exception("Failed to create purchase/license for customer %s", customer_id)
-            flash("Purchase could not be completed. No license was generated; please retry.", "danger")
+            logger.exception(
+                "Failed to create purchase/license for customer %s", customer_id
+            )
+            flash(
+                "Purchase could not be completed. No license was generated; please retry.",
+                "danger",
+            )
             return redirect(url_for("purchase_new", cid=customer_id))
 
-        flash(f"Purchase recorded & license generated (ID: {payload['license_id']}).", "success")
+        flash(
+            f"Purchase recorded & license generated (ID: {payload['license_id']}).",
+            "success",
+        )
         return redirect(url_for("customer_detail", cid=customer_id))
 
-    customers = db.execute("SELECT id, name, company FROM customers WHERE status='active' ORDER BY name").fetchall()
-    return render_template("purchase_form.html", customers=customers, tiers=TIERS, plans=PLANS)
+    customers = db.execute(
+        "SELECT id, name, company FROM customers WHERE status='active' ORDER BY name"
+    ).fetchall()
+    return render_template(
+        "purchase_form.html", customers=customers, tiers=TIERS, plans=PLANS
+    )
 
 
 @app.route("/licenses/generate/<int:purchase_id>", methods=["POST"])
@@ -1453,26 +1856,35 @@ def purchase_new():
 def generate_license_for_purchase(purchase_id):
     db = get_db()
     next_url = request.form.get("next", "").strip()
-    purchase = db.execute("""
+    purchase = db.execute(
+        """
         SELECT p.*, c.name as customer_name
         FROM purchases p
         JOIN customers c ON p.customer_id = c.id
         WHERE p.id = ?
-    """, (purchase_id,)).fetchone()
+    """,
+        (purchase_id,),
+    ).fetchone()
 
     if not purchase:
         flash("Purchase not found.", "danger")
         return redirect(url_for("purchases_list"))
 
-    existing = db.execute("SELECT id FROM licenses WHERE purchase_id = ?", (purchase_id,)).fetchone()
+    existing = db.execute(
+        "SELECT id FROM licenses WHERE purchase_id = ?", (purchase_id,)
+    ).fetchone()
     if existing:
         flash("License already exists for this purchase.", "warning")
         return redirect(url_for("license_detail", lid=existing[0]))
 
     hw_id = request.form.get("hw_id", "").strip().lower()
     if plan_requires_hw_id(purchase["plan"]) and not hw_id:
-        flash("Hardware MAC ID is required to generate a license for this plan.", "danger")
-        return redirect_to_next_or(next_url, "customer_detail", cid=purchase["customer_id"])
+        flash(
+            "Hardware MAC ID is required to generate a license for this plan.", "danger"
+        )
+        return redirect_to_next_or(
+            next_url, "customer_detail", cid=purchase["customer_id"]
+        )
 
     try:
         db.execute("BEGIN")
@@ -1484,26 +1896,29 @@ def generate_license_for_purchase(purchase_id):
             hw_id=hw_id,
         )
 
-        db.execute("""
+        db.execute(
+            """
             INSERT INTO licenses (
                 purchase_id, customer_id, license_id, license_key, tier, plan, features,
                 max_hosts, tool_version, version_compat, hw_id, issued_at, expires_at
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """, (
-            purchase["id"],
-            purchase["customer_id"],
-            payload["license_id"],
-            key,
-            payload["tier"],
-            payload["plan"],
-            json.dumps(payload["features"]),
-            payload["max_hosts"],
-            payload["tool_version"],
-            payload["version_compat"],
-            payload.get("hw_id", ""),
-            payload["issued_at"],
-            payload["expires_at"],
-        ))
+        """,
+            (
+                purchase["id"],
+                purchase["customer_id"],
+                payload["license_id"],
+                key,
+                payload["tier"],
+                payload["plan"],
+                json.dumps(payload["features"]),
+                payload["max_hosts"],
+                payload["tool_version"],
+                payload["version_compat"],
+                payload.get("hw_id", ""),
+                payload["issued_at"],
+                payload["expires_at"],
+            ),
+        )
 
         log_activity(
             "generate_license",
@@ -1515,9 +1930,13 @@ def generate_license_for_purchase(purchase_id):
         db.commit()
     except Exception:
         db.rollback()
-        logger.exception("Failed to generate recovery license for purchase %s", purchase_id)
+        logger.exception(
+            "Failed to generate recovery license for purchase %s", purchase_id
+        )
         flash("License generation failed for this purchase. Please retry.", "danger")
-        return redirect_to_next_or(next_url, "customer_detail", cid=purchase["customer_id"])
+        return redirect_to_next_or(
+            next_url, "customer_detail", cid=purchase["customer_id"]
+        )
 
     flash("License generated successfully.", "success")
     return redirect_to_next_or(next_url, "purchases_list")
@@ -1549,24 +1968,34 @@ def licenses_list():
         query += " WHERE " + " AND ".join(wheres)
     query += " ORDER BY l.created_at DESC"
     licenses = db.execute(query, params).fetchall()
-    return render_template("licenses.html", licenses=licenses, tiers=TIERS,
-                           status_filter=status_filter, tier_filter=tier_filter)
+    return render_template(
+        "licenses.html",
+        licenses=licenses,
+        tiers=TIERS,
+        status_filter=status_filter,
+        tier_filter=tier_filter,
+    )
 
 
 @app.route("/licenses/<int:lid>")
 @login_required
 def license_detail(lid):
     db = get_db()
-    lic = db.execute("""
+    lic = db.execute(
+        """
         SELECT l.*, c.name as customer_name, c.company, c.email as customer_email
         FROM licenses l JOIN customers c ON l.customer_id = c.id
         WHERE l.id = ?
-    """, (lid,)).fetchone()
+    """,
+        (lid,),
+    ).fetchone()
     if not lic:
         flash("License not found.", "danger")
         return redirect(url_for("licenses_list"))
     features = safe_json_loads(lic["features"], [])
-    return render_template("license_detail.html", lic=lic, features=features, tiers=TIERS)
+    return render_template(
+        "license_detail.html", lic=lic, features=features, tiers=TIERS
+    )
 
 
 @app.route("/licenses/<int:lid>/revoke", methods=["POST"])
@@ -1574,17 +2003,26 @@ def license_detail(lid):
 def license_revoke(lid):
     db = get_db()
     reason = request.form.get("reason", "").strip()
-    db.execute("""
+    db.execute(
+        """
         UPDATE licenses SET is_revoked=1, revoked_at=CURRENT_TIMESTAMP, revoke_reason=?
         WHERE id=?
-    """, (reason, lid))
+    """,
+        (reason, lid),
+    )
     db.commit()
-    lic = db.execute("SELECT license_id, customer_id FROM licenses WHERE id=?", (lid,)).fetchone()
+    lic = db.execute(
+        "SELECT license_id, customer_id FROM licenses WHERE id=?", (lid,)
+    ).fetchone()
     if not lic:
         flash("License not found.", "danger")
         return redirect(url_for("licenses_list"))
-    log_activity("license.revoked", "license", lid,
-                 f"License {lic['license_id']} revoked: {reason}")
+    log_activity(
+        "license.revoked",
+        "license",
+        lid,
+        f"License {lic['license_id']} revoked: {reason}",
+    )
     logger.info("License %s revoked: %s", lic["license_id"], reason)
     flash("License revoked.", "warning")
     return redirect(url_for("license_detail", lid=lid))
@@ -1604,35 +2042,68 @@ def license_copy_key(lid):
 @login_required
 def license_regenerate(lid):
     db = get_db()
-    old = db.execute("""
+    old = db.execute(
+        """
         SELECT l.*, c.name as customer_name
         FROM licenses l JOIN customers c ON l.customer_id = c.id
         WHERE l.id = ?
-    """, (lid,)).fetchone()
+    """,
+        (lid,),
+    ).fetchone()
     if not old:
         flash("License not found.", "danger")
         return redirect(url_for("licenses_list"))
 
-    db.execute("UPDATE licenses SET is_revoked=1, revoked_at=CURRENT_TIMESTAMP, revoke_reason='Regenerated' WHERE id=?", (lid,))
+    db.execute(
+        "UPDATE licenses SET is_revoked=1, revoked_at=CURRENT_TIMESTAMP, revoke_reason='Regenerated' WHERE id=?",
+        (lid,),
+    )
 
-    key, payload = generate_license_key(old["tier"], old["plan"], old["customer_name"], old["max_hosts"], hw_id=old["hw_id"])
-    db.execute("""
+    key, payload = generate_license_key(
+        old["tier"],
+        old["plan"],
+        old["customer_name"],
+        old["max_hosts"],
+        hw_id=old["hw_id"],
+    )
+    db.execute(
+        """
         INSERT INTO licenses (purchase_id, customer_id, license_id, license_key,
                               tier, plan, features, max_hosts, hw_id, tool_version,
                               version_compat, issued_at, expires_at)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-    """, (
-        old["purchase_id"], old["customer_id"], payload["license_id"], key,
-        payload["tier"], old["plan"], json.dumps(payload["features"]),
-        old["max_hosts"], old["hw_id"], TOOL_VERSION, VERSION_COMPAT,
-        payload["issued_at"], payload["expires_at"],
-    ))
+    """,
+        (
+            old["purchase_id"],
+            old["customer_id"],
+            payload["license_id"],
+            key,
+            payload["tier"],
+            old["plan"],
+            json.dumps(payload["features"]),
+            old["max_hosts"],
+            old["hw_id"],
+            TOOL_VERSION,
+            VERSION_COMPAT,
+            payload["issued_at"],
+            payload["expires_at"],
+        ),
+    )
     db.commit()
     new_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
-    log_activity("license.regenerated", "license", new_id,
-                 f"Regenerated from {old['license_id']} → {payload['license_id']}")
-    logger.info("License regenerated: %s → %s", old["license_id"], payload["license_id"])
-    flash(f"New license generated (ID: {payload['license_id']}). Old key revoked.", "success")
+    log_activity(
+        "license.regenerated",
+        "license",
+        new_id,
+        f"Regenerated from {old['license_id']} → {payload['license_id']}",
+    )
+    logger.info(
+        "License regenerated: %s → %s", old["license_id"], payload["license_id"]
+    )
+    flash(
+        f"New license generated (ID: {payload['license_id']}). Old key revoked.",
+        "success",
+    )
     return redirect(url_for("license_detail", lid=new_id))
 
 
@@ -1641,7 +2112,9 @@ def license_regenerate(lid):
 @login_required
 def versions_list():
     db = get_db()
-    versions = db.execute("SELECT * FROM tool_versions ORDER BY release_date DESC").fetchall()
+    versions = db.execute(
+        "SELECT * FROM tool_versions ORDER BY release_date DESC"
+    ).fetchall()
     return render_template("versions.html", versions=versions, tiers=TIERS)
 
 
@@ -1654,20 +2127,23 @@ def version_new():
         is_latest = 1 if request.form.get("is_latest") else 0
         if is_latest:
             db.execute("UPDATE tool_versions SET is_latest=0")
-        db.execute("""
+        db.execute(
+            """
             INSERT INTO tool_versions (version, codename, release_date, changelog,
                                        min_tier, is_latest, download_url, file_hash)
             VALUES (?,?,?,?,?,?,?,?)
-        """, (
-            version,
-            request.form.get("codename", "").strip(),
-            request.form["release_date"].strip(),
-            request.form.get("changelog", "").strip(),
-            request.form.get("min_tier", "basic"),
-            is_latest,
-            request.form.get("download_url", "").strip(),
-            request.form.get("file_hash", "").strip(),
-        ))
+        """,
+            (
+                version,
+                request.form.get("codename", "").strip(),
+                request.form["release_date"].strip(),
+                request.form.get("changelog", "").strip(),
+                request.form.get("min_tier", "basic"),
+                is_latest,
+                request.form.get("download_url", "").strip(),
+                request.form.get("file_hash", "").strip(),
+            ),
+        )
         db.commit()
         log_activity("version.created", "version", None, f"Version {version} added")
         flash(f"Version {version} added.", "success")
@@ -1687,21 +2163,24 @@ def version_edit(vid):
         is_latest = 1 if request.form.get("is_latest") else 0
         if is_latest:
             db.execute("UPDATE tool_versions SET is_latest=0")
-        db.execute("""
+        db.execute(
+            """
             UPDATE tool_versions SET version=?, codename=?, release_date=?, changelog=?,
                    min_tier=?, is_latest=?, download_url=?, file_hash=?
             WHERE id=?
-        """, (
-            request.form["version"].strip(),
-            request.form.get("codename", "").strip(),
-            request.form["release_date"].strip(),
-            request.form.get("changelog", "").strip(),
-            request.form.get("min_tier", "basic"),
-            is_latest,
-            request.form.get("download_url", "").strip(),
-            request.form.get("file_hash", "").strip(),
-            vid,
-        ))
+        """,
+            (
+                request.form["version"].strip(),
+                request.form.get("codename", "").strip(),
+                request.form["release_date"].strip(),
+                request.form.get("changelog", "").strip(),
+                request.form.get("min_tier", "basic"),
+                is_latest,
+                request.form.get("download_url", "").strip(),
+                request.form.get("file_hash", "").strip(),
+                vid,
+            ),
+        )
         db.commit()
         flash("Version updated.", "success")
         return redirect(url_for("versions_list"))
@@ -1713,7 +2192,9 @@ def version_edit(vid):
 @login_required
 def activity_log():
     db = get_db()
-    logs = db.execute("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 200").fetchall()
+    logs = db.execute(
+        "SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 200"
+    ).fetchall()
     return render_template("activity.html", logs=logs)
 
 
@@ -1732,9 +2213,15 @@ def reports():
         FROM purchases WHERE status='completed'
         GROUP BY tier
     """).fetchall()
-    lic_active = db.execute("SELECT COUNT(*) FROM licenses WHERE is_revoked=0 AND expires_at > CURRENT_TIMESTAMP").fetchone()[0]
-    lic_expired = db.execute("SELECT COUNT(*) FROM licenses WHERE is_revoked=0 AND expires_at <= CURRENT_TIMESTAMP").fetchone()[0]
-    lic_revoked = db.execute("SELECT COUNT(*) FROM licenses WHERE is_revoked=1").fetchone()[0]
+    lic_active = db.execute(
+        "SELECT COUNT(*) FROM licenses WHERE is_revoked=0 AND expires_at > CURRENT_TIMESTAMP"
+    ).fetchone()[0]
+    lic_expired = db.execute(
+        "SELECT COUNT(*) FROM licenses WHERE is_revoked=0 AND expires_at <= CURRENT_TIMESTAMP"
+    ).fetchone()[0]
+    lic_revoked = db.execute(
+        "SELECT COUNT(*) FROM licenses WHERE is_revoked=1"
+    ).fetchone()[0]
     expiring = db.execute("""
         SELECT l.*, c.name as customer_name, c.company
         FROM licenses l JOIN customers c ON l.customer_id = c.id
@@ -1742,11 +2229,17 @@ def reports():
           AND l.expires_at <= datetime('now', '+30 days')
         ORDER BY l.expires_at ASC
     """).fetchall()
-    return render_template("reports.html",
-                           revenue_monthly=revenue_monthly, revenue_tier=revenue_tier,
-                           lic_active=lic_active, lic_expired=lic_expired,
-                           lic_revoked=lic_revoked, expiring=expiring,
-                           tiers=TIERS, plans=PLANS)
+    return render_template(
+        "reports.html",
+        revenue_monthly=revenue_monthly,
+        revenue_tier=revenue_tier,
+        lic_active=lic_active,
+        lic_expired=lic_expired,
+        lic_revoked=lic_revoked,
+        expiring=expiring,
+        tiers=TIERS,
+        plans=PLANS,
+    )
 
 
 # ── API ────────────────────────────────────────────────────────
@@ -1754,15 +2247,19 @@ def reports():
 @login_required
 def api_stats():
     db = get_db()
-    return jsonify({
-        "customers": db.execute("SELECT COUNT(*) FROM customers").fetchone()[0],
-        "purchases": db.execute("SELECT COUNT(*) FROM purchases").fetchone()[0],
-        "licenses": db.execute("SELECT COUNT(*) FROM licenses").fetchone()[0],
-        "active_licenses": db.execute(
-            "SELECT COUNT(*) FROM licenses WHERE is_revoked=0 AND expires_at > CURRENT_TIMESTAMP"
-        ).fetchone()[0],
-        "revenue": db.execute("SELECT COALESCE(SUM(amount),0) FROM purchases WHERE status='completed'").fetchone()[0],
-    })
+    return jsonify(
+        {
+            "customers": db.execute("SELECT COUNT(*) FROM customers").fetchone()[0],
+            "purchases": db.execute("SELECT COUNT(*) FROM purchases").fetchone()[0],
+            "licenses": db.execute("SELECT COUNT(*) FROM licenses").fetchone()[0],
+            "active_licenses": db.execute(
+                "SELECT COUNT(*) FROM licenses WHERE is_revoked=0 AND expires_at > CURRENT_TIMESTAMP"
+            ).fetchone()[0],
+            "revenue": db.execute(
+                "SELECT COALESCE(SUM(amount),0) FROM purchases WHERE status='completed'"
+            ).fetchone()[0],
+        }
+    )
 
 
 @app.route("/api/version/latest")
@@ -1774,13 +2271,15 @@ def api_latest_version():
     ).fetchone()
     if not ver:
         return jsonify({"version": None})
-    return jsonify({
-        "version": ver["version"],
-        "codename": ver["codename"],
-        "release_date": ver["release_date"],
-        "changelog": ver["changelog"],
-        "download_url": ver["download_url"],
-    })
+    return jsonify(
+        {
+            "version": ver["version"],
+            "codename": ver["codename"],
+            "release_date": ver["release_date"],
+            "changelog": ver["changelog"],
+            "download_url": ver["download_url"],
+        }
+    )
 
 
 @app.route("/api/health")
@@ -1801,8 +2300,11 @@ init_db()  # Ensure tables exist on startup (even via Gunicorn)
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="PatchMaster Vendor Portal")
-    parser.add_argument("--port", type=int, default=int(os.environ.get("CM_PORT", 5050)))
+    parser.add_argument(
+        "--port", type=int, default=int(os.environ.get("CM_PORT", 5050))
+    )
     parser.add_argument("--host", default=os.environ.get("CM_HOST", "127.0.0.1"))
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
@@ -1811,5 +2313,7 @@ if __name__ == "__main__":
     print(f"  http://{args.host}:{args.port}")
     admin_user = os.environ.get("CM_ADMIN_USER", "admin")
     admin_pass = os.environ.get("CM_ADMIN_PASS", "")
-    print(f"  Login: {admin_user} / {'*' * len(admin_pass) if admin_pass else '<No Password set>'}\n")
+    print(
+        f"  Login: {admin_user} / {'*' * len(admin_pass) if admin_pass else '<No Password set>'}\n"
+    )
     app.run(host=args.host, port=args.port, debug=args.debug)
