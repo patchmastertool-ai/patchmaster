@@ -33,7 +33,26 @@ This is a critical bug fix release that addresses deployment issues, WebSocket c
 
 **Impact:** Agents now register and appear in UI reliably
 
-### 3. Database Initialization Feedback ✅
+### 3. Offline Agent Installation ✅ NEW
+**Issue:** Agents requiring internet to download Python packages during installation
+
+**Fix:**
+- Agent package now includes all Python dependencies bundled in virtualenv
+- Uses local wheels from `vendor/wheels/` directory
+- No internet required on target hosts
+- Truly self-contained package (~35 MB)
+
+**Impact:** Agents can be installed on air-gapped/offline systems without any issues
+
+**Included Dependencies:**
+- Flask (web framework)
+- prometheus_client (metrics)
+- psutil (system info)
+- requests (HTTP client)
+- PyYAML (config parsing)
+- All transitive dependencies
+
+### 4. Database Initialization Feedback ✅
 **Issue:** Installation hanging with no feedback during database initialization
 
 **Fix:**
@@ -257,6 +276,8 @@ None. This is a backward-compatible bug fix release.
 - `fix_agent_registration.sh` - Agent registration fixes
 - `diagnose_agent_issues.sh` - Comprehensive diagnostics
 - `DEPLOYMENT_FIXES.md` - Complete deployment guide
+- `OFFLINE_AGENT_INSTALLATION.md` - Offline agent installation guide
+- `agent/download-wheels.sh` - Download Python wheels for offline builds
 - `RELEASE_NOTES_2.0.1.md` - This file
 
 ## Verification
