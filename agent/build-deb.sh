@@ -34,27 +34,74 @@ cp "${SCRIPT_DIR}/__init__.py"     "${BUILD_ROOT}${INSTALL_DIR}/" 2>/dev/null ||
 # --- 3. Create bundled virtualenv with all dependencies ---
 echo "    Creating virtualenv with bundled dependencies..."
 python3 -m venv "${BUILD_ROOT}${INSTALL_DIR}/venv"
-PIP_OPTS=${PIP_OPTS:---no-index}
+
+# Try to find wheels in multiple locations
+WORKSPACE_WHEELS="/workspace/wheels"
 DEFAULT_WHEEL_DIR="${SCRIPT_DIR}/../vendor/wheels"
 CACHE_WHEELS="$HOME/.cache/pip/wheels"
-if [[ -z "${PIP_FIND_LINKS:-}" && -d "$DEFAULT_WHEEL_DIR" ]]; then
-  PIP_FIND_LINKS="$DEFAULT_WHEEL_DIR"
-elif [[ -z "${PIP_FIND_LINKS:-}" && -d "$CACHE_WHEELS" ]]; then
-  PIP_FIND_LINKS="$CACHE_WHEELS"
+
+PIP_OPTS=""
+WHEEL_DIR=""
+if [[ -d "$WORKSPACE_WHEELS" ]]; then
+  echo "    Using wheels from /workspace/wheels"
+  PIP_OPTS="--find-links ${WORKSPACE_WHEELS} --no-index"
+  WHEEL_DIR="$WORKSPACE_WHEELS"
+elif [[ -d "$DEFAULT_WHEEL_DIR" ]]; then
+  echo "    Using wheels from vendor/wheels"
+  PIP_OPTS="--find-links ${DEFAULT_WHEEL_DIR} --no-index"
+  WHEEL_DIR="$DEFAULT_WHEEL_DIR"
+elif [[ -d "$CACHE_WHEELS" ]]; then
+  echo "    Using wheels from cache"
+  PIP_OPTS="--find-links ${CACHE_WHEELS}"
+  WHEEL_DIR="$CACHE_WHEELS"
+else
+  echo "    WARNING: No local wheels found, will download from PyPI"
+  echo "    For offline installations, ensure vendor/wheels directory exists"
 fi
-if [[ -z "${PIP_FIND_LINKS:-}" ]]; then
-  echo "[deb] ERROR: PIP_FIND_LINKS not set and no wheel cache found (vendor/wheels or ~/.cache/pip/wheels)."
-  exit 1
-fi
-if [[ -n "${PIP_FIND_LINKS:-}" ]]; then
-  PIP_OPTS="$PIP_OPTS --find-links ${PIP_FIND_LINKS}"
-fi
-export PIP_FIND_LINKS
+
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 VENV_PIP="${BUILD_ROOT}${INSTALL_DIR}/venv/bin/pip"
-$VENV_PIP install $PIP_OPTS -q setuptools wheel
-$VENV_PIP install $PIP_OPTS -q -r "${SCRIPT_DIR}/requirements.txt"
+
+# Install setuptools and wheel first
+if [[ -n "$WHEEL_DIR" ]]; then
+  $VENV_PIP install $PIP_OPTS -q setuptools wheel 2>/dev/null || {
+    echo "    WARNING: Failed to install from local wheels, trying PyPI..."
+    $VENV_PIP install -q setuptools wheel
+  }
+else
+  $VENV_PIP install -q setuptools wheel
+fi
+
+# Install requirements from local wheels (offline mode)
+if [[ -n "$WHEEL_DIR" ]]; then
+  echo "    Installing dependencies from local wheels (offline mode)..."
+  $VENV_PIP install $PIP_OPTS -q -r "${SCRIPT_DIR}/requirements.txt" 2>/dev/null || {
+    echo "    WARNING: Failed to install from local wheels, trying PyPI..."
+    $VENV_PIP install -q -r "${SCRIPT_DIR}/requirements.txt"
+  }
+else
+  echo "    Installing dependencies from PyPI (requires internet)..."
+  $VENV_PIP install -q -r "${SCRIPT_DIR}/requirements.txt"
+fi
+
 echo "    Dependencies installed into venv."
+
+# Verify all required packages are installed
+echo "    Verifying installed packages..."
+MISSING_PKGS=""
+for pkg in Flask prometheus_client psutil requests PyYAML; do
+  if ! $VENV_PIP show "$pkg" >/dev/null 2>&1; then
+    MISSING_PKGS="$MISSING_PKGS $pkg"
+  fi
+done
+
+if [[ -n "$MISSING_PKGS" ]]; then
+  echo "    ERROR: Missing packages:$MISSING_PKGS"
+  echo "    Agent package may not work offline!"
+  exit 1
+fi
+
+echo "    All required packages verified."
 
 # Remove pip/setuptools cache to reduce size
 rm -rf "${BUILD_ROOT}${INSTALL_DIR}/venv/share" 2>/dev/null || true
