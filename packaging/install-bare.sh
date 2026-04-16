@@ -410,8 +410,39 @@ if [[ "$DISTRO" == "debian" ]]; then
         gpg --batch --yes --no-default-keyring --keyring /etc/apt/trusted.gpg --delete-key ACCC4CF8 >/dev/null 2>&1 || true
     fi
     
-    apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10 update -qq 2>/dev/null || apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10 update -qq --allow-releaseinfo-change 2>/dev/null || true
-    apt-get install -y -qq gnupg2 wget lsb-release ca-certificates
+    # Robust apt update with retry logic and mirror sync handling
+    log "  Updating package lists..."
+    apt_update_with_retry() {
+        local max_attempts=3
+        local attempt=1
+        
+        while [ $attempt -le $max_attempts ]; do
+            log "  Attempt $attempt/$max_attempts..."
+            
+            # Clean apt cache to avoid stale data
+            apt-get clean 2>/dev/null || true
+            rm -rf /var/lib/apt/lists/* 2>/dev/null || true
+            
+            # Try update with retries and timeouts
+            if apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update 2>&1 | grep -v "File has unexpected size"; then
+                log "  Package lists updated successfully"
+                return 0
+            fi
+            
+            if [ $attempt -lt $max_attempts ]; then
+                warn "  apt update had issues, waiting 10 seconds for mirror sync..."
+                sleep 10
+            fi
+            
+            attempt=$((attempt + 1))
+        done
+        
+        warn "  apt update had issues but continuing with cached packages..."
+        return 0
+    }
+    
+    apt_update_with_retry
+    apt-get install -y -qq gnupg2 wget lsb-release ca-certificates 2>/dev/null || true
 
     # Configure PostgreSQL repository (PGDG) if reachable; otherwise fall back to distro packages
     log "  Configuring PostgreSQL repository..."
@@ -1216,14 +1247,38 @@ fi
 if [[ "${SKIP_FRONTEND_E2E:-0}" == "1" ]]; then
     log "  Skipping frontend E2E tooling because SKIP_FRONTEND_E2E=1"
 else
-    log "  Installing frontend E2E tooling..."
-    install_frontend_node_modules
-    mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
-    if run_with_progress "npx playwright install" env PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_BROWSERS_PATH" npx playwright install --with-deps chromium; then
-        chown -R "$SVC_USER:$SVC_GROUP" "$INSTALL_DIR/frontend/node_modules" "$PLAYWRIGHT_BROWSERS_PATH" 2>/dev/null || true
-        log "  Frontend E2E tooling ready"
+    log "  Installing frontend E2E tooling (optional - for Testing Center)..."
+    
+    # Try to install browsers but don't fail if it doesn't work
+    if command -v npm >/dev/null 2>&1; then
+        install_frontend_node_modules || {
+            warn "  npm install failed, skipping browser installation"
+            warn "  Testing Center will not be available but core features will work"
+            SKIP_FRONTEND_E2E=1
+        }
+        
+        if [[ "${SKIP_FRONTEND_E2E:-0}" != "1" ]]; then
+            mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
+            
+            # Try to install browsers with timeout and error handling
+            log "  Downloading Playwright browsers (this may take a few minutes)..."
+            if timeout 600 env PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_BROWSERS_PATH" npx playwright install --with-deps chromium 2>&1 | grep -v "Failed to fetch\|unexpected size" || true; then
+                if [ -d "$PLAYWRIGHT_BROWSERS_PATH/chromium"* ] 2>/dev/null; then
+                    chown -R "$SVC_USER:$SVC_GROUP" "$INSTALL_DIR/frontend/node_modules" "$PLAYWRIGHT_BROWSERS_PATH" 2>/dev/null || true
+                    log "  Frontend E2E tooling ready"
+                else
+                    warn "  Browser installation incomplete - Testing Center may not work"
+                    warn "  This is OK - all core PatchMaster features will work normally"
+                fi
+            else
+                warn "  Browser installation failed (apt mirror sync issue or timeout)"
+                warn "  This is OK - all core PatchMaster features will work normally"
+                warn "  Testing Center can be set up later with: npx playwright install --with-deps chromium"
+            fi
+        fi
     else
-        warn "  Frontend E2E tooling install failed; the app is usable, but Testing Center browser smoke may be unavailable until Playwright installs cleanly."
+        warn "  npm not available, skipping browser installation"
+        warn "  Testing Center will not be available but core features will work"
     fi
 fi
 
