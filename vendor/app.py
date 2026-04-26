@@ -526,11 +526,15 @@ DEFAULT_ENCRYPT_PUBLIC_KEY = _load_setting("LICENSE_ENCRYPT_PUBLIC_KEY")
 DEFAULT_ENABLE_ACTIVATION_CALLBACK = _load_setting(
     "PM_VENDOR_ENABLE_ACTIVATION_CALLBACK"
 ).lower() in {"1", "true", "yes", "on"}
-if not DEFAULT_SIGN_PRIVATE_KEY and not DEFAULT_SIGN_KEY:
+if not DEFAULT_SIGN_PRIVATE_KEY:
     raise RuntimeError(
-        "No vendor signing material is configured. "
-        "Set LICENSE_SIGN_PRIVATE_KEY for new asymmetric signing or "
-        "LICENSE_SIGN_KEY for legacy shared-secret signing."
+        "LICENSE_SIGN_PRIVATE_KEY is required for PM2 license generation. "
+        "Run: python generate-pm2-keys.py to generate keys."
+    )
+if not DEFAULT_ENCRYPT_PUBLIC_KEY:
+    raise RuntimeError(
+        "LICENSE_ENCRYPT_PUBLIC_KEY is required for PM2 license generation. "
+        "Run: python generate-pm2-keys.py to generate keys."
     )
 TOOL_VERSION = "2.0"
 VERSION_COMPAT = "2.x"

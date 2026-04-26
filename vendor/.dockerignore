@@ -1,0 +1,10 @@
+# Vendor Portal — Docker Ignore
+__pycache__/
+*.pyc
+.env
+data/
+backups/
+*.db
+.git
+.venv
+certs/

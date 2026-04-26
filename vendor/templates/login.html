@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login — PatchMaster Vendor Portal</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ch-bg:          #060e20;
+      --ch-surface:     #05183c;
+      --ch-surface-top: #00225a;
+      --ch-primary:     #38bdf8;
+      --ch-on-primary:  #004560;
+      --ch-on-surface:  #dee5ff;
+      --ch-on-variant:  #91aaeb;
+      --ch-error:       #ff9993;
+      --ch-tertiary:    #fbbf24;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      background: var(--ch-bg);
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh;
+      font-family: 'Inter', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .login-wrap {
+      width: 100%; max-width: 420px; padding: 1rem;
+    }
+    .login-card {
+      background: var(--ch-surface);
+      border-radius: 14px;
+      padding: 2.5rem 2.25rem;
+      position: relative; overflow: hidden;
+    }
+    .login-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--ch-primary), rgba(56,189,248,0.3));
+    }
+    .login-card h3 {
+      font-weight: 800; letter-spacing: -0.03em;
+      color: var(--ch-on-surface); margin: 0;
+    }
+    .form-label {
+      color: var(--ch-on-variant); font-size: 0.72rem; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .form-control {
+      background: var(--ch-surface-top);
+      border: none; border-radius: 7px;
+      color: var(--ch-on-surface);
+      outline: 1px solid transparent;
+      padding: 0.65rem 0.85rem;
+      transition: outline 0.15s, box-shadow 0.15s;
+    }
+    .form-control:focus {
+      background: var(--ch-surface-top);
+      outline: 1px solid var(--ch-primary);
+      color: var(--ch-on-surface);
+      box-shadow: 0 0 0 3px rgba(56,189,248,0.12);
+    }
+    .form-control::placeholder { color: rgba(145,170,235,0.4); }
+    .btn-primary {
+      background: var(--ch-primary); border: none;
+      color: var(--ch-on-primary); font-weight: 700;
+      padding: 0.65rem; border-radius: 7px;
+      letter-spacing: 0.01em;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-primary:hover { background: #7dd3fc; color: var(--ch-on-primary); transform: translateY(-1px); }
+    .alert-danger  { background: rgba(255,153,147,0.1); color: var(--ch-error); border: none; border-left: 3px solid var(--ch-error); border-radius: 6px; font-size: 0.85rem; }
+    .alert-success { background: rgba(56,189,248,0.1); color: var(--ch-primary); border: none; border-left: 3px solid var(--ch-primary); border-radius: 6px; font-size: 0.85rem; }
+    .alert-info    { background: rgba(56,189,248,0.08); color: var(--ch-on-variant); border: none; border-left: 3px solid rgba(56,189,248,0.4); border-radius: 6px; font-size: 0.85rem; }
+    .brand-icon { font-size: 2.2rem; color: var(--ch-primary); }
+    .brand-sub { color: var(--ch-on-variant); font-size: 0.78rem; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="text-center mb-4">
+        <div class="brand-icon"><i class="bi bi-shield-lock-fill"></i></div>
+        <h3 class="mt-2">PatchMaster</h3>
+        <div class="brand-sub">Vendor Portal &middot; {{ portal_name }} v{{ portal_version }}</div>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }} py-2 px-3 mb-3" role="alert">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST" action="{{ url_for('login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="mb-3">
+          <label class="form-label">Username</label>
+          <input type="text" name="username" class="form-control" required autofocus placeholder="Enter username">
+        </div>
+        <div class="mb-4">
+          <label class="form-label">Password</label>
+          <input type="password" name="password" class="form-control" required placeholder="Enter password">
+        </div>
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+        </button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

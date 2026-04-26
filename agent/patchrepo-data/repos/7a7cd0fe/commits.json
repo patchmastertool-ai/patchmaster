@@ -1,0 +1,15 @@
+[
+  {
+    "id": "d4e7d2e39682",
+    "repo_id": "7a7cd0fe",
+    "branch": "main",
+    "message": "Test commit",
+    "author": "admin",
+    "email": "admin@test.local",
+    "timestamp": "2026-04-15T07:58:58.861388",
+    "files_changed": 0,
+    "additions": 0,
+    "deletions": 0,
+    "parent_id": null
+  }
+]

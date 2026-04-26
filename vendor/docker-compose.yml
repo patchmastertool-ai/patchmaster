@@ -1,0 +1,71 @@
+###############################################################################
+#  PatchMaster Vendor Portal — Docker Compose (Production)
+#  Usage:
+#    cd vendor/
+#    cp .env.example .env   # edit .env with real credentials
+#    docker compose up -d
+###############################################################################
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - CM_SECRET_KEY=${CM_SECRET_KEY:?Set CM_SECRET_KEY in .env}
+      - CM_ADMIN_USER=${CM_ADMIN_USER:-admin}
+      - CM_ADMIN_PASS=${CM_ADMIN_PASS:?Set CM_ADMIN_PASS in .env}
+      - CM_DB_PATH=/app/data/customers.db
+      - LICENSE_SIGN_KEY=${LICENSE_SIGN_KEY:?Set LICENSE_SIGN_KEY in .env}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - vendor_data:/app/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5050/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - vendor_net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx:
+    image: nginx:1.25-alpine
+    restart: always
+    ports:
+      - "${VENDOR_PORT:-8080}:80"
+      - "${VENDOR_SSL_PORT:-8443}:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${SSL_CERT_DIR:-./certs}:/etc/nginx/ssl:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    networks:
+      - vendor_net
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+volumes:
+  vendor_data:
+
+networks:
+  vendor_net:
+    driver: bridge

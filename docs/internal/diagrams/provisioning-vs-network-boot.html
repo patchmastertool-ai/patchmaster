@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PatchMaster Provisioning Vs Network Boot</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #334155;
+      --border: #475569;
+      --ink: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent2: #818cf8;
+      --green: #34d399;
+      --amber: #fbbf24;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 40px 48px 32px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, #0f172a 0%, #1a2744 100%);
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 10px;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 1rem;
+      max-width: 800px;
+      line-height: 1.7;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 6px;
+      margin-bottom: 14px;
+    }
+    .badge-blue  { background: rgba(56,189,248,0.15); color: var(--accent);  border: 1px solid rgba(56,189,248,0.3); }
+    .badge-green { background: rgba(52,211,153,0.15); color: var(--green);   border: 1px solid rgba(52,211,153,0.3); }
+    .badge-amber { background: rgba(251,191,36,0.15); color: var(--amber);   border: 1px solid rgba(251,191,36,0.3); }
+
+    main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 40px 48px 80px;
+    }
+
+    .diagram-block {
+      margin-bottom: 48px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .diagram-header {
+      padding: 20px 28px 16px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(90deg, rgba(56,189,248,0.05) 0%, transparent 100%);
+    }
+
+    .diagram-header h2 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .diagram-header h2 .num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: rgba(56,189,248,0.2);
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .diagram-header p {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.6;
+      padding-left: 38px;
+    }
+
+    .diagram-body {
+      padding: 28px;
+      overflow-x: auto;
+      overflow-y: visible;
+      background: #fff;
+    }
+
+    .instructions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+      padding: 28px;
+    }
+
+    .instr-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+
+    .instr-card strong {
+      display: block;
+      color: var(--accent);
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .instr-card ol, .instr-card ul {
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 0.875rem;
+      line-height: 1.8;
+    }
+
+    .instr-card code {
+      background: rgba(56,189,248,0.1);
+      color: var(--accent);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: Consolas, monospace;
+      font-size: 0.82rem;
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      padding: 28px;
+    }
+
+    @media (max-width: 768px) {
+      .compare-grid { grid-template-columns: 1fr; }
+      header { padding: 24px; }
+      main { padding: 24px; }
+    }
+
+    .compare-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 22px;
+    }
+
+    .compare-card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .compare-card ul {
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 0.875rem;
+      line-height: 1.9;
+    }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 24px 48px;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <span class="badge badge-blue">Provisioning Center</span>
+      <span class="badge badge-green">Network Boot</span>
+      <span class="badge badge-amber">Managed Relay</span>
+    </div>
+    <h1>Provisioning vs Network Boot</h1>
+    <p>Internal reference explaining the exact difference between the production-ready Provisioning Center (enrolled-host imaging) and the managed-relay Network Boot workspace (bare-metal pre-agent rollout). Shows how both capabilities fit into a single enterprise operating model.</p>
+  </header>
+
+  <main>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">1</span> Current Provisioning Center Flow</h2>
+        <p>Live production path for already-enrolled endpoints — golden image capture, store, and restore.</p>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart TD
+    A["Operator opens Provisioning Center"] --> B["Choose registered source host"]
+    B --> C["Capture full-system image"]
+    C --> D["Store golden image on PatchMaster server"]
+    D --> E["Create provisioning template"]
+    E --> F["Choose registered target hosts"]
+    F --> G["Queue rollout through operations queue"]
+    G --> H["Target agents download and restore image"]
+    H --> I["PatchMaster records per-target results"]
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">2</span> Managed Network Boot Flow</h2>
+        <p>Bare-metal workspace for managed-relay deployment — no agent required on the target yet.</p>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart TD
+    A["Operator opens Network Boot"] --> B["Create boot network"]
+    B --> C["Define addressing, relay binding, BIOS and UEFI boot files"]
+    C --> D["Create boot profile"]
+    D --> E["Choose install mode and install source"]
+    E --> F["Optional: link stored golden image template"]
+    F --> G["PatchMaster generates iPXE script"]
+    G --> H["PatchMaster generates answer file"]
+    H --> I["Operator validates rollout design"]
+    I --> J["Relay bundle prepared for deployment"]
+    J --> K["Bare-metal endpoint boots and enrolls"]
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">3</span> Managed Relay Workflow</h2>
+        <p>Complete operator flow from network design through first-boot enrollment.</p>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart LR
+    A["Define networks\nand relay binding"] --> B["Publish boot artifacts\nand answer files"]
+    B --> C["Install and validate\nmanaged relays"]
+    C --> D["Run bare-metal rollout\nand first-boot enrollment"]
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">4</span> Side-By-Side Capability Comparison</h2>
+        <p>Why current provisioning and PXE-style rollout are related but not identical.</p>
+      </div>
+      <div class="compare-grid">
+        <div class="compare-card">
+          <h3>✅ Current Provisioning Center</h3>
+          <ul>
+            <li>Requires enrolled agent on target</li>
+            <li>Uses snapshot + restore APIs</li>
+            <li>Best for reimage and recovery</li>
+            <li>Works on live, online fleet hosts</li>
+            <li>Golden image stored on PatchMaster server</li>
+          </ul>
+        </div>
+        <div class="compare-card">
+          <h3>🌐 Managed Network Boot</h3>
+          <ul>
+            <li>Designed for pre-agent bare-metal hosts</li>
+            <li>Uses iPXE + answer file generation</li>
+            <li>Includes relay bundle + unattended boot</li>
+            <li>First-boot enrolls agent automatically</li>
+            <li>Supports BIOS and UEFI targets</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">5</span> Delivery Boundary</h2>
+        <p>Security trust boundary between enrolled-host and pre-agent delivery paths.</p>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart TD
+    A["Provisioning Center"] --> B["Managed host already trusted by PatchMaster agent"]
+    C["Managed Network Boot"] --> D["Pre-agent delivery boundary"]
+    D --> E["HTTP boot artifacts"]
+    D --> F["DHCP/TFTP configuration"]
+    D --> G["First-boot agent enrollment"]
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">6</span> Operator Instructions</h2>
+      </div>
+      <div class="instructions-grid">
+        <div class="instr-card">
+          <strong>Use Provisioning Center When</strong>
+          <ol>
+            <li>Target machine is already enrolled with PatchMaster agent.</li>
+            <li>You need live golden-image reimage, recovery, or branch refresh.</li>
+            <li>You want rollout execution today, not future transport design.</li>
+          </ol>
+        </div>
+        <div class="instr-card">
+          <strong>Use Network Boot When</strong>
+          <ol>
+            <li>You want to define boot networks and profile standards.</li>
+            <li>You want to preview iPXE and answer-file artifacts.</li>
+            <li>You want to prepare managed relay services and run pre-agent rollout from the same workspace.</li>
+          </ol>
+        </div>
+        <div class="instr-card">
+          <strong>Safe Product Message</strong>
+          <ol>
+            <li>PatchMaster already provides production-ready stored-image provisioning for enrolled hosts.</li>
+            <li>PatchMaster now also provides a managed-relay network-boot workspace.</li>
+            <li>Relay preparation, boot artifact delivery, and first-boot enrollment are part of the live operator flow.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    Architecture diagrams &bull;
+    <code>docs/internal/diagrams/provisioning-vs-network-boot.html</code> &bull;
+    Also see: <code>platform-feature-diagrams.html</code> &bull; <code>license-workflow-diagrams.html</code>
+  </footer>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "default",
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: "basis" },
+      themeVariables: {
+        fontSize: '15px',
+        primaryColor: '#dbeafe',
+        primaryTextColor: '#0f172a',
+        primaryBorderColor: '#3b82f6',
+        lineColor: '#475569',
+        secondaryColor: '#f0fdf4',
+        tertiaryColor: '#fefce8',
+        background: '#ffffff'
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if customer else 'New' }} Customer{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h4 class="mb-0 fw-bold">{{ 'Edit Customer' if customer else 'New Customer' }}</h4>
+    <small class="text-muted">{{ customer['name'] if customer else 'Add a new customer record' }}</small>
+  </div>
+  <a href="{{ url_for('customers_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Back</a>
+</div>
+
+<div class="card-dark p-4" style="max-width: 700px;">
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Full Name <span class="text-danger">*</span></label>
+        <input type="text" name="name" class="form-control" required value="{{ customer['name'] if customer else '' }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Email <span class="text-danger">*</span></label>
+        <input type="email" name="email" class="form-control" required value="{{ customer['email'] if customer else '' }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Company</label>
+        <input type="text" name="company" class="form-control" value="{{ customer['company'] if customer else '' }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Phone</label>
+        <input type="text" name="phone" class="form-control" value="{{ customer['phone'] if customer else '' }}">
+      </div>
+      <div class="col-12">
+        <label class="form-label">Address</label>
+        <input type="text" name="address" class="form-control" value="{{ customer['address'] if customer else '' }}">
+      </div>
+      {% if customer %}
+      <div class="col-md-6">
+        <label class="form-label">Status</label>
+        <select name="status" class="form-select">
+          <option value="active" {% if customer['status'] == 'active' %}selected{% endif %}>Active</option>
+          <option value="inactive" {% if customer['status'] == 'inactive' %}selected{% endif %}>Inactive</option>
+          <option value="churned" {% if customer['status'] == 'churned' %}selected{% endif %}>Churned</option>
+        </select>
+      </div>
+      {% endif %}
+      <div class="col-12">
+        <label class="form-label">Notes</label>
+        <textarea name="notes" class="form-control" rows="3">{{ customer['notes'] if customer else '' }}</textarea>
+      </div>
+    </div>
+    <div class="mt-4">
+      <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {{ 'Update' if customer else 'Create' }} Customer</button>
+      <a href="{{ url_for('customers_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

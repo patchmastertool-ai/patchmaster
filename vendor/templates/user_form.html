@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit User' if user else 'New User' }}{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h4 class="mb-0 fw-bold">{{ 'Edit User' if user else 'New Portal User' }}</h4>
+  </div>
+  <a href="{{ url_for('users_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Back</a>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card-dark p-4">
+      <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+        {% if not user %}
+        <div class="mb-3">
+          <label class="form-label">Username</label>
+          <input type="text" name="username" class="form-control" required autocomplete="off">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <input type="password" name="password" class="form-control" required minlength="6" autocomplete="new-password">
+          <div class="form-text text-muted">Minimum 6 characters.</div>
+        </div>
+        {% endif %}
+
+        <div class="mb-3">
+          <label class="form-label">Role</label>
+          <select name="role" class="form-select">
+            <option value="viewer" {% if user and user['role'] == 'viewer' %}selected{% endif %}>Viewer — read-only access</option>
+            <option value="admin" {% if user and user['role'] == 'admin' %}selected{% endif %}>Admin — full access + user management</option>
+          </select>
+        </div>
+
+        {% if user %}
+        <div class="mb-3">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="is_active" id="isActive"
+                   {% if user['is_active'] %}checked{% endif %}>
+            <label class="form-check-label" for="isActive">Account Active</label>
+          </div>
+        </div>
+        {% endif %}
+
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-check-lg"></i> {{ 'Save Changes' if user else 'Create User' }}
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -9,7 +9,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="$ROOT_DIR/dist"
-VERSION="${VERSION:-2.0.0}"
+VERSION="${VERSION:-2.0.1}"
 SKIP_FRONTEND_BUILD=0
 PKG_TEMP_DIR=""
 
@@ -147,17 +147,47 @@ main() {
         --exclude='agent/dist' \
         --exclude='agent/__pycache__' \
         --exclude='agent/*.pyc' \
-        --exclude='agent/.git'
+        --exclude='agent/.git' \
+        --exclude='agent/--skip-agents' \
+        --exclude='agent/2.0.0'
 
     [[ -d "$ROOT_DIR/monitoring" ]] && copy_tree monitoring "$PKG_TEMP_DIR"
     [[ -d "$ROOT_DIR/docs/public" ]] && mkdir -p "$PKG_TEMP_DIR/docs" && copy_tree docs/public "$PKG_TEMP_DIR/docs"
-    [[ -d "$ROOT_DIR/vendor/wheels" ]] && mkdir -p "$PKG_TEMP_DIR/vendor" && copy_tree vendor/wheels "$PKG_TEMP_DIR/vendor"
-    [[ -d "$ROOT_DIR/packaging" ]] && copy_tree packaging "$PKG_TEMP_DIR"
+    [[ -d "$ROOT_DIR/vendor/wheels" ]] && mkdir -p "$PKG_TEMP_DIR/vendor/wheels" && cp -r "$ROOT_DIR/vendor/wheels/"* "$PKG_TEMP_DIR/vendor/wheels/" 2>/dev/null || true
+
+    # Include pre-built vendor portal package
+    if [[ -f "$ROOT_DIR/vendor/dist/patchmaster-vendor-${VERSION}.tar.gz" ]]; then
+        mkdir -p "$PKG_TEMP_DIR/vendor/dist"
+        cp "$ROOT_DIR/vendor/dist/patchmaster-vendor-${VERSION}.tar.gz" "$PKG_TEMP_DIR/vendor/dist/"
+        echo "    [+] Included vendor portal package"
+    fi
+    
+    # Include pre-built agent packages (only v2.0.1)
+    if [[ -d "$ROOT_DIR/agent/dist" ]]; then
+        mkdir -p "$PKG_TEMP_DIR/agent/dist"
+        cp "$ROOT_DIR/agent/dist"/patch-agent-2.0.1.* "$PKG_TEMP_DIR/agent/dist/" 2>/dev/null || true
+        cp "$ROOT_DIR/agent/dist"/agent-latest.* "$PKG_TEMP_DIR/agent/dist/" 2>/dev/null || true
+        # Update symlinks to point to 2.0.1 packages
+        for f in "$PKG_TEMP_DIR/agent/dist"/agent-latest.*; do
+            base="${f##*/}"
+            ext="${base##*.}"
+            [[ -f "$PKG_TEMP_DIR/agent/dist/patch-agent-2.0.1.$ext" ]] && rm "$f" && ln -s "patch-agent-2.0.1.$ext" "$f" 2>/dev/null || true
+        done
+    fi
+    
+    [[ -d "$ROOT_DIR/packaging" ]] && copy_tree packaging "$PKG_TEMP_DIR" \
+        --exclude='packaging/dist' \
+        --exclude='packaging/.git'
     [[ -d "$ROOT_DIR/scripts" ]] && copy_tree scripts "$PKG_TEMP_DIR" --exclude='scripts/__pycache__'
 
     cp "$ROOT_DIR"/docker-compose*.yml "$PKG_TEMP_DIR/" 2>/dev/null || true
     cp "$ROOT_DIR"/Makefile "$PKG_TEMP_DIR/" 2>/dev/null || true
     cp "$ROOT_DIR"/README.md "$PKG_TEMP_DIR/" 2>/dev/null || true
+
+    # Include license key and authority env files
+    [[ -f "$ROOT_DIR/license.key" ]] && cp "$ROOT_DIR/license.key" "$PKG_TEMP_DIR/license.key" && echo "    [+] Included license.key"
+    [[ -f "$ROOT_DIR/patchmaster-license-public.env" ]] && cp "$ROOT_DIR/patchmaster-license-public.env" "$PKG_TEMP_DIR/patchmaster-license-public.env" && echo "    [+] Included patchmaster-license-public.env"
+    [[ -f "$ROOT_DIR/patchmaster-license-authority.env" ]] && cp "$ROOT_DIR/patchmaster-license-authority.env" "$PKG_TEMP_DIR/patchmaster-license-authority.env" && echo "    [+] Included patchmaster-license-authority.env"
     cp "$ROOT_DIR"/.env.production "$PKG_TEMP_DIR/" 2>/dev/null || true
     cp "$ROOT_DIR"/auto-setup.* "$PKG_TEMP_DIR/" 2>/dev/null || true
 

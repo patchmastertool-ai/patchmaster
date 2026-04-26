@@ -1,0 +1,19 @@
+[
+  {
+    "id": "PR-94EE13",
+    "repo_id": "7a7cd0fe",
+    "title": "Add feature",
+    "description": "",
+    "source_branch": "feature-1",
+    "target_branch": "main",
+    "author": "admin",
+    "status": "open",
+    "created_at": "2026-04-15T07:58:58.914007",
+    "updated_at": "2026-04-15T07:58:58.914007",
+    "reviewers": [],
+    "comments": [],
+    "merges_into": null,
+    "merged_by": null,
+    "merged_at": null
+  }
+]

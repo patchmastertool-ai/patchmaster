@@ -1,0 +1,16 @@
+{
+  "f090b1d0-c5c": {
+    "id": "f090b1d0-c5c",
+    "repo_id": "b18fb16b",
+    "name": "patch-agent",
+    "version": "2.0.0",
+    "platform": "linux",
+    "filename": "agent-latest.rpm",
+    "size": 0,
+    "checksum": "",
+    "uploaded_by": "admin",
+    "uploaded_at": "2026-04-15T07:27:45.125439",
+    "metadata": {},
+    "download_count": 0
+  }
+}

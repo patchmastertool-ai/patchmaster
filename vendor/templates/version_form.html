@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if version else 'New' }} Version{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h4 class="mb-0 fw-bold">{{ 'Edit Version' if version else 'Add New Version' }}</h4>
+    <small class="text-muted">{{ ('v' + version['version']) if version else 'Track a new PatchMaster release' }}</small>
+  </div>
+  <a href="{{ url_for('versions_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Back</a>
+</div>
+
+<div class="card-dark p-4" style="max-width: 700px;">
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label">Version <span class="text-danger">*</span></label>
+        <input type="text" name="version" class="form-control" required placeholder="e.g. 2.1.0"
+               value="{{ version['version'] if version else '' }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Codename</label>
+        <input type="text" name="codename" class="form-control" placeholder="e.g. Phoenix"
+               value="{{ version['codename'] if version else '' }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Release Date <span class="text-danger">*</span></label>
+        <input type="date" name="release_date" class="form-control" required
+               value="{{ version['release_date'] if version else '' }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Minimum Tier Required</label>
+        <select name="min_tier" class="form-select">
+          {% for key, t in tiers.items() %}
+          <option value="{{ key }}" {% if version and version['min_tier'] == key %}selected{% endif %}>{{ t['label'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <div class="form-check mt-4">
+          <input class="form-check-input" type="checkbox" name="is_latest" id="isLatest"
+                 {% if version and version['is_latest'] %}checked{% endif %}>
+          <label class="form-check-label" for="isLatest">Mark as Latest Release</label>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Download URL</label>
+        <input type="text" name="download_url" class="form-control" placeholder="https://..."
+               value="{{ version['download_url'] if version else '' }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">File Hash (SHA-256)</label>
+        <input type="text" name="file_hash" class="form-control font-monospace" placeholder="sha256:..."
+               value="{{ version['file_hash'] if version else '' }}">
+      </div>
+      <div class="col-12">
+        <label class="form-label">Changelog / Release Notes</label>
+        <textarea name="changelog" class="form-control" rows="8" placeholder="What's new in this version...">{{ version['changelog'] if version else '' }}</textarea>
+      </div>
+    </div>
+    <div class="mt-4">
+      <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {{ 'Update' if version else 'Add' }} Version</button>
+      <a href="{{ url_for('versions_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

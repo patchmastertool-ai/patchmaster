@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}License {{ lic['license_id'] }}{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h4 class="mb-0 fw-bold">License {{ lic['license_id'] }}</h4>
+    <small class="text-muted">{{ lic['customer_name'] }} &middot; {{ lic['company'] or 'Individual' }}</small>
+  </div>
+  <div>
+    <a href="{{ url_for('customer_detail', cid=lic['customer_id']) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Customer</a>
+    {% if not lic['is_revoked'] %}
+      <form method="POST" action="{{ url_for('license_regenerate', lid=lic['id']) }}" class="d-inline"
+            onsubmit="return confirm('Regenerate? The current key will be revoked.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button class="btn btn-outline-warning btn-sm"><i class="bi bi-arrow-repeat"></i> Regenerate</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-md-8">
+    <!-- License Info -->
+    <div class="card-dark p-4 mb-4">
+      <h6 class="fw-bold mb-3"><i class="bi bi-key-fill text-warning"></i> License Details</h6>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <small class="text-muted d-block">License ID</small>
+          <span class="font-monospace fw-bold">{{ lic['license_id'] }}</span>
+        </div>
+        <div class="col-md-6">
+          <small class="text-muted d-block">Status</small>
+          {% if lic['is_revoked'] %}<span class="badge badge-revoked fs-6">Revoked</span>
+          {% elif lic['expires_at'] < now %}<span class="badge badge-expired fs-6">Expired</span>
+          {% else %}<span class="badge badge-active fs-6">Active</span>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <small class="text-muted d-block">Customer</small>
+          <a href="{{ url_for('customer_detail', cid=lic['customer_id']) }}" class="text-info text-decoration-none">
+            {{ lic['customer_name'] }}
+          </a>
+          {% if lic['company'] %}<span class="text-muted"> ({{ lic['company'] }})</span>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <small class="text-muted d-block">Email</small>
+          <span>{{ lic['customer_email'] }}</span>
+        </div>
+        <div class="col-md-4">
+          <small class="text-muted d-block">Tier</small>
+          <span class="badge badge-tier-{{ lic['tier'] }} fs-6">{{ tiers[lic['tier']]['label'] }}</span>
+        </div>
+        <div class="col-md-4">
+          <small class="text-muted d-block">Plan</small>
+          <span>{{ lic['plan'] }}</span>
+        </div>
+        <div class="col-md-4">
+          <small class="text-muted d-block">Max Hosts</small>
+          <span>{{ 'Unlimited' if lic['max_hosts'] == 0 else lic['max_hosts'] }}</span>
+        </div>
+        <div class="col-md-4">
+          <small class="text-muted d-block">Tool Version</small>
+          <span>{{ lic['tool_version'] }}</span>
+        </div>
+        <div class="col-md-4">
+          <small class="text-muted d-block">Compatible With</small>
+          <span>{{ lic['version_compat'] }}</span>
+        </div>
+        <div class="col-md-4">
+          <small class="text-muted d-block">Hardware ID (MAC)</small>
+          <span class="font-monospace text-warning fw-bold">{{ lic['hw_id'] or '—' }}</span>
+        </div>
+        <div class="col-md-4">
+          <small class="text-muted d-block">Purchase ID</small>
+          <span>#{{ lic['purchase_id'] }}</span>
+        </div>
+        <div class="col-md-4">
+          <small class="text-muted d-block">Issued At</small>
+          <span>{{ lic['issued_at'] }}</span>
+        </div>
+        <div class="col-md-4">
+          <small class="text-muted d-block">Expires At</small>
+          <span>{{ lic['expires_at'] }}</span>
+        </div>
+        <div class="col-md-4">
+          <small class="text-muted d-block">Created</small>
+          <span>{{ lic['created_at'] }}</span>
+        </div>
+        {% if lic['is_revoked'] %}
+        <div class="col-md-6">
+          <small class="text-muted d-block">Revoked At</small>
+          <span class="text-danger">{{ lic['revoked_at'] }}</span>
+        </div>
+        <div class="col-md-6">
+          <small class="text-muted d-block">Revoke Reason</small>
+          <span class="text-danger">{{ lic['revoke_reason'] or '—' }}</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Features -->
+    <div class="card-dark p-4 mb-4">
+      <h6 class="fw-bold mb-3"><i class="bi bi-grid-fill text-primary"></i> Features ({{ features|length }})</h6>
+      <div class="row g-2">
+        {% for f in features %}
+        <div class="col-md-4 col-6">
+          <div class="d-flex align-items-center gap-2 p-2 rounded" style="background:#060e20">
+            <i class="bi bi-check-circle-fill text-success"></i>
+            <span class="text-capitalize">{{ f }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- License Key -->
+    <div class="card-dark p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="fw-bold mb-0"><i class="bi bi-lock-fill text-success"></i> License Key</h6>
+        <button class="btn btn-sm btn-outline-success" onclick="copyKey()"><i class="bi bi-clipboard"></i> Copy Key</button>
+      </div>
+      <div class="license-key-box" id="licenseKey">{{ lic['license_key'] }}</div>
+      <div class="mt-3">
+        <small class="text-muted d-block mb-1">Activation Instructions:</small>
+        <small class="text-muted">1. Place in <code>/opt/patchmaster/license.key</code> on the server</small><br>
+        <small class="text-muted">2. Or use PatchMaster Web UI → Settings → License</small><br>
+        <small class="text-muted">3. Or API: <code>POST /api/license/activate</code> with <code>{"license_key": "..."}</code></small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar actions -->
+  <div class="col-md-4">
+    {% if not lic['is_revoked'] and lic['expires_at'] > now %}
+    <div class="card-dark p-3 mb-3" style="border-color:#dc2626">
+      <h6 class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-triangle-fill"></i> Revoke License</h6>
+      <form method="POST" action="{{ url_for('license_revoke', lid=lic['id']) }}"
+            onsubmit="return confirm('Are you sure you want to revoke this license?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="mb-3">
+          <label class="form-label small">Reason</label>
+          <textarea name="reason" class="form-control form-control-sm" rows="2" placeholder="Reason for revocation..."></textarea>
+        </div>
+        <button type="submit" class="btn btn-danger btn-sm w-100"><i class="bi bi-x-circle"></i> Revoke License</button>
+      </form>
+    </div>
+    {% endif %}
+
+    <div class="card-dark p-3 mb-3">
+      <h6 class="fw-bold mb-3"><i class="bi bi-info-circle text-info"></i> Tier Info</h6>
+      <div class="mb-2"><span class="text-muted">Tier:</span> <span class="badge badge-tier-{{ lic['tier'] }}">{{ tiers[lic['tier']]['label'] }}</span></div>
+      <div class="mb-2"><span class="text-muted">Description:</span> {{ tiers[lic['tier']]['description'] }}</div>
+      <div><span class="text-muted">Max Features:</span> {{ tiers[lic['tier']]['features']|length }}</div>
+    </div>
+
+    <div class="card-dark p-3">
+      <h6 class="fw-bold mb-3"><i class="bi bi-clock text-warning"></i> Timeline</h6>
+      {% set now_dt = now %}
+      {% if not lic['is_revoked'] and lic['expires_at'] > now %}
+        {% set days_left = ((lic['expires_at'][:10]|replace('-','')|int - (now[:10]|replace('-','')|int))) %}
+        <div class="mb-2 text-success"><i class="bi bi-check-circle"></i> License is active</div>
+        <div class="text-muted small">Expires: {{ lic['expires_at'][:10] }}</div>
+      {% elif lic['is_revoked'] %}
+        <div class="mb-2 text-danger"><i class="bi bi-x-circle"></i> License was revoked</div>
+        <div class="text-muted small">Revoked: {{ lic['revoked_at'] }}</div>
+      {% else %}
+        <div class="mb-2 text-warning"><i class="bi bi-clock"></i> License has expired</div>
+        <div class="text-muted small">Expired: {{ lic['expires_at'][:10] }}</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function copyKey() {
+  const key = document.getElementById('licenseKey').textContent;
+  navigator.clipboard.writeText(key).then(() => {
+    const btn = event.target.closest('button');
+    btn.innerHTML = '<i class="bi bi-check-lg"></i> Copied!';
+    setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard"></i> Copy Key'; }, 2000);
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}New Purchase{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h4 class="mb-0 fw-bold">New Purchase</h4>
+    <small class="text-muted">Record a purchase and auto-generate a license key</small>
+  </div>
+  <a href="{{ url_for('purchases_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Back</a>
+</div>
+
+<div class="row g-4">
+  <div class="col-md-7">
+    <div class="card-dark p-4">
+      <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Customer <span class="text-danger">*</span></label>
+            <select name="customer_id" class="form-select" required>
+              <option value="">— Select Customer —</option>
+              {% for c in customers %}
+              <option value="{{ c['id'] }}" {% if request.args.get('cid')|default('') == c['id']|string %}selected{% endif %}>
+                {{ c['name'] }}{% if c['company'] %} ({{ c['company'] }}){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">License Tier <span class="text-danger">*</span></label>
+            <select name="tier" id="tierSelect" class="form-select" required>
+              {% for key, t in tiers.items() %}
+              <option value="{{ key }}" data-mult="{{ t['price_mult'] }}" data-features="{{ t['features']|length }}" data-hosts="{{ t['default_hosts'] }}">
+                {{ t['label'] }} — {{ t['description'] }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Duration Plan <span class="text-danger">*</span></label>
+            <select name="plan" id="planSelect" class="form-select" required>
+              {% for key, p in plans.items() %}
+              <option value="{{ key }}" data-price="{{ p['price'] }}" data-no-bind="{{ 1 if p.get('no_bind', False) else 0 }}">{{ p['label'] }}{% if p['price'] > 0 %} — Base ${{ p['price'] }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Max Hosts (Override)</label>
+            <input type="number" name="max_hosts" id="maxHostsInput" class="form-control" placeholder="Default for tier" min="0">
+            <small class="text-muted" id="hostsHint">0 = Unlimited (leave blank to use tier default)</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Hardware MAC ID
+              <span class="text-danger" id="hwRequired">*</span>
+            </label>
+            <input type="text" name="hw_id" id="hwInput" class="form-control font-monospace" placeholder="e.g. 00:11:22:33:44:55">
+            <small class="text-muted" id="hwHelp">Optional for unbound plans. Required when hardware binding is enabled.</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Amount (USD) <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text" style="background:#060e20;border-color:rgba(43,70,128,0.15);color:#91aaeb">$</span>
+              <input type="number" name="amount" id="amountInput" class="form-control" step="0.01" min="0" value="0" required>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Payment Method</label>
+            <select name="payment_method" class="form-select">
+              <option value="">— Select —</option>
+              <option value="credit_card">Credit Card</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="paypal">PayPal</option>
+              <option value="invoice">Invoice</option>
+              <option value="crypto">Cryptocurrency</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Payment Reference</label>
+            <input type="text" name="payment_ref" class="form-control" placeholder="Transaction ID / Invoice #">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <textarea name="notes" class="form-control" rows="2" placeholder="Optional purchase notes..."></textarea>
+          </div>
+        </div>
+        <div class="mt-4">
+          <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Record Purchase & Generate License</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Price calculator & tier info -->
+  <div class="col-md-5">
+    <div class="card-dark p-3 mb-3">
+      <h6 class="fw-bold mb-3"><i class="bi bi-calculator text-info"></i> Price Calculator</h6>
+      <div id="priceCalc">
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Base Price:</span><span id="calcBase">$0</span>
+        </div>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Tier Multiplier:</span><span id="calcMult">1.0x</span>
+        </div>
+        <hr style="border-color:rgba(43,70,128,0.15)">
+        <div class="d-flex justify-content-between">
+          <span class="fw-bold">Suggested Total:</span><span class="fw-bold text-success" id="calcTotal">$0</span>
+        </div>
+      </div>
+      <button type="button" class="btn btn-outline-success btn-sm mt-3 w-100" onclick="applyPrice()">
+        <i class="bi bi-arrow-down"></i> Apply Suggested Price
+      </button>
+    </div>
+
+    <div class="card-dark p-3">
+      <h6 class="fw-bold mb-3"><i class="bi bi-grid-fill text-warning"></i> Tier Comparison</h6>
+      <table class="table table-sm table-dark-custom mb-0">
+        <thead><tr><th>Tier</th><th>Hosts</th><th>Features</th><th>Mult</th></tr></thead>
+        <tbody>
+          {% for key, t in tiers.items() %}
+          <tr>
+            <td><span class="badge badge-tier-{{ key }}">{{ t['label'] }}</span></td>
+            <td><strong>{{ '∞' if t['default_hosts'] == 0 else t['default_hosts'] }}</strong></td>
+            <td>{{ t['features']|length }}</td>
+            <td>{{ t['price_mult'] }}x</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function updateCalc() {
+  const tier = document.getElementById('tierSelect');
+  const plan = document.getElementById('planSelect');
+  const hostsHint = document.getElementById('hostsHint');
+  const hwHelp = document.getElementById('hwHelp');
+  const hwReq = document.getElementById('hwRequired');
+  const hwInput = document.getElementById('hwInput');
+  const mult = parseFloat(tier.selectedOptions[0].dataset.mult) || 1;
+  const base = parseFloat(plan.selectedOptions[0].dataset.price) || 0;
+  const hosts = parseInt(tier.selectedOptions[0].dataset.hosts);
+  const total = base * mult;
+  
+  document.getElementById('calcBase').textContent = '$' + base.toFixed(0);
+  document.getElementById('calcMult').textContent = mult + 'x';
+  document.getElementById('calcTotal').textContent = '$' + total.toFixed(2);
+  
+  const hostLabel = hosts === 0 ? 'Unlimited' : hosts;
+  hostsHint.innerHTML = `Tier Default: <strong>${hostLabel}</strong> hosts. Leave blank to use default.`;
+
+  const noBind = plan.selectedOptions[0].dataset.noBind === '1';
+  hwHelp.textContent = noBind
+    ? 'Optional for this plan. The generated license will not require hardware binding.'
+    : 'Required for this plan. The generated license will be bound to the provided hardware ID.';
+  hwReq.style.display = noBind ? 'none' : 'inline';
+  hwInput.required = !noBind;
+}
+function applyPrice() {
+  const tier = document.getElementById('tierSelect');
+  const plan = document.getElementById('planSelect');
+  const mult = parseFloat(tier.selectedOptions[0].dataset.mult) || 1;
+  const base = parseFloat(plan.selectedOptions[0].dataset.price) || 0;
+  document.getElementById('amountInput').value = (base * mult).toFixed(2);
+}
+document.getElementById('tierSelect').addEventListener('change', updateCalc);
+document.getElementById('planSelect').addEventListener('change', updateCalc);
+updateCalc();
+</script>
+{% endblock %}

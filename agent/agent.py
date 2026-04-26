@@ -99,6 +99,28 @@ def _load_valid_tokens() -> set:
     return tokens
 
 
+def run_cmd(cmd, timeout=3600, cwd=None):
+    """Execute a shell command and return (returncode, output)."""
+    # Use a dummy logger if not yet initialized
+    log = globals().get('logger')
+    if log:
+        log.info("CMD: %s", " ".join(str(c) for c in cmd) if isinstance(cmd, list) else cmd)
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=timeout,
+            cwd=cwd,
+        )
+        return proc.returncode, proc.stdout
+    except subprocess.TimeoutExpired:
+        return -1, "Command timed out"
+    except Exception as e:
+        return -1, str(e)
+
+
 def _require_auth(fn):
     """Decorator: enforce bearer-token auth when any token is configured."""
     if not FLASK_AVAILABLE:
@@ -1860,24 +1882,7 @@ JOB_STATUS = {
 }
 
 
-def run_cmd(cmd, timeout=3600, cwd=None):
-    logger.info(
-        "CMD: %s", " ".join(str(c) for c in cmd) if isinstance(cmd, list) else cmd
-    )
-    try:
-        proc = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            timeout=timeout,
-            cwd=cwd,
-        )
-        return proc.returncode, proc.stdout
-    except subprocess.TimeoutExpired:
-        return -1, "Command timed out"
-    except Exception as e:
-        return -1, str(e)
+# run_cmd is now defined earlier in the file (after _load_valid_tokens)
 
 
 def _normalize_job_result(result):

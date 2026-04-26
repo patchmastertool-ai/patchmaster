@@ -384,7 +384,7 @@ def _decrypt_pm2_payload(header_b64: str, envelope_b64: str) -> dict:
 
 
 def normalize_license_key(raw_value: str) -> str:
-    """Extract a real PatchMaster key from pasted text, JSON, or wrapped files."""
+    """Extract a real PatchMaster PM2 key from pasted text, JSON, or wrapped files."""
     if raw_value is None:
         return ""
 
@@ -405,11 +405,8 @@ def normalize_license_key(raw_value: str) -> str:
         except Exception:
             pass
 
+    # Only accept PM2 licenses
     direct = PM2_LICENSE_KEY_PATTERN.search(text)
-    if direct:
-        return direct.group(0)
-
-    direct = PM1_LICENSE_KEY_PATTERN.search(text)
     if direct:
         return direct.group(0)
 
@@ -419,54 +416,37 @@ def normalize_license_key(raw_value: str) -> str:
     if wrapped:
         return wrapped.group(0)
 
-    wrapped = PM1_LICENSE_KEY_PATTERN.search(compact)
-    if wrapped:
-        return wrapped.group(0)
-
     return text.strip("\"'")
 
 
 def decode_license(license_key: str) -> dict:
     """Decode and verify a license key string. Returns the payload dict."""
     license_key = normalize_license_key(license_key)
-    if not license_key or not (
-        license_key.startswith("PM1-") or license_key.startswith("PM2-")
-    ):
+    if not license_key:
         raise LicenseError("Invalid license key format")
+    
+    # Only PM2 (encrypted) licenses are supported
+    if not license_key.startswith("PM2-"):
+        raise LicenseError("Invalid license key format. Only PM2 encrypted licenses are supported.")
 
     if not _verification_configured():
         raise LicenseError("PatchMaster license verification is not configured")
 
-    if license_key.startswith("PM2-"):
-        body = license_key[4:]
-        parts = body.split(".", 2)
-        if len(parts) != 3:
-            raise LicenseError("Invalid license key format")
-        header_b64, envelope_b64, signature = parts
-        signed_message = f"{header_b64}.{envelope_b64}"
-        if not _verify_signature(signed_message, signature):
-            raise LicenseError("License key signature verification failed")
-        header = _decode_b64_json(header_b64, "License key header is corrupted")
-        payload = _decrypt_pm2_payload(header_b64, envelope_b64)
-        payload.setdefault("license_id", header.get("license_id", "legacy"))
-        payload.setdefault("sig_alg", header.get("sig_alg", payload.get("sig_alg", "")))
-        payload.setdefault("enc_alg", header.get("enc_alg", payload.get("enc_alg", "")))
-        payload.setdefault("license_format", "PM2")
-    else:
-        body = license_key[4:]
-        if "." not in body:
-            raise LicenseError("Invalid license key format")
-        payload_b64, signature = body.rsplit(".", 1)
-        if not _verify_signature(payload_b64, signature):
-            raise LicenseError("License key signature verification failed")
-        raw_payload = _decode_key_bytes(payload_b64)
-        if not raw_payload:
-            raise LicenseError("License key payload is corrupted")
-        try:
-            payload = json.loads(raw_payload.decode("utf-8"))
-        except Exception:
-            raise LicenseError("License key payload is corrupted")
-        payload.setdefault("license_format", "PM1")
+    # PM2 License Processing
+    body = license_key[4:]
+    parts = body.split(".", 2)
+    if len(parts) != 3:
+        raise LicenseError("Invalid license key format")
+    header_b64, envelope_b64, signature = parts
+    signed_message = f"{header_b64}.{envelope_b64}"
+    if not _verify_signature(signed_message, signature):
+        raise LicenseError("License key signature verification failed")
+    header = _decode_b64_json(header_b64, "License key header is corrupted")
+    payload = _decrypt_pm2_payload(header_b64, envelope_b64)
+    payload.setdefault("license_id", header.get("license_id", "legacy"))
+    payload.setdefault("sig_alg", header.get("sig_alg", payload.get("sig_alg", "")))
+    payload.setdefault("enc_alg", header.get("enc_alg", payload.get("enc_alg", "")))
+    payload.setdefault("license_format", "PM2")
 
     # Validate required fields
     for field in ("plan", "customer"):

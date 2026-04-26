@@ -1,0 +1,10 @@
+data/
+backups/
+*.db
+.env
+__pycache__/
+*.pyc
+certs/*.pem
+certs/*.key
+certs/*.crt
+!certs/README.md

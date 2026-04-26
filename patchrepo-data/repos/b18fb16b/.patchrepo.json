@@ -1,0 +1,12 @@
+{
+  "id": "b18fb16b",
+  "name": "patch-agent-main",
+  "description": "Main patch agent repository",
+  "visibility": "internal",
+  "default_branch": "main",
+  "created_at": "2026-04-15T07:27:44.959537",
+  "updated_at": "2026-04-15T07:27:44.959537",
+  "owner": "admin",
+  "collaborators": [],
+  "forked_from": null
+}

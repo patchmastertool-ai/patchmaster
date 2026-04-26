@@ -7,7 +7,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="2.0.0"
+VERSION="2.0.1"  # Fixed: ensures dependencies are properly installed and verified
 PKG_NAME="patch-agent"
 INSTALL_DIR="/opt/patch-agent"
 OUTPUT="${1:-${SCRIPT_DIR}/../backend/static/agent-latest.deb}"
@@ -31,82 +31,33 @@ cp "${SCRIPT_DIR}/agent.py"        "${BUILD_ROOT}${INSTALL_DIR}/"
 cp "${SCRIPT_DIR}/requirements.txt" "${BUILD_ROOT}${INSTALL_DIR}/"
 cp "${SCRIPT_DIR}/__init__.py"     "${BUILD_ROOT}${INSTALL_DIR}/" 2>/dev/null || true
 
-# --- 3. Create bundled virtualenv with all dependencies ---
-echo "    Creating virtualenv with bundled dependencies..."
-python3 -m venv "${BUILD_ROOT}${INSTALL_DIR}/venv"
+# --- 3. Bundle Python wheels for offline installation ---
+echo "    Bundling Python wheels for offline installation..."
+mkdir -p "${BUILD_ROOT}${INSTALL_DIR}/wheels"
 
 # Try to find wheels in multiple locations
 WORKSPACE_WHEELS="/workspace/wheels"
 DEFAULT_WHEEL_DIR="${SCRIPT_DIR}/../vendor/wheels"
-CACHE_WHEELS="$HOME/.cache/pip/wheels"
 
-PIP_OPTS=""
-WHEEL_DIR=""
-if [[ -d "$WORKSPACE_WHEELS" ]]; then
-  echo "    Using wheels from /workspace/wheels"
-  PIP_OPTS="--find-links ${WORKSPACE_WHEELS} --no-index"
-  WHEEL_DIR="$WORKSPACE_WHEELS"
-elif [[ -d "$DEFAULT_WHEEL_DIR" ]]; then
-  echo "    Using wheels from vendor/wheels"
-  PIP_OPTS="--find-links ${DEFAULT_WHEEL_DIR} --no-index"
-  WHEEL_DIR="$DEFAULT_WHEEL_DIR"
-elif [[ -d "$CACHE_WHEELS" ]]; then
-  echo "    Using wheels from cache"
-  PIP_OPTS="--find-links ${CACHE_WHEELS}"
-  WHEEL_DIR="$CACHE_WHEELS"
+# Download/copy wheels to bundle with package
+if [[ -d "$WORKSPACE_WHEELS" ]] && [[ -n "$(ls -A "$WORKSPACE_WHEELS" 2>/dev/null)" ]]; then
+  echo "    Copying wheels from /workspace/wheels..."
+  cp "$WORKSPACE_WHEELS"/*.whl "${BUILD_ROOT}${INSTALL_DIR}/wheels/" 2>/dev/null || true
+elif [[ -d "$DEFAULT_WHEEL_DIR" ]] && [[ -n "$(ls -A "$DEFAULT_WHEEL_DIR" 2>/dev/null)" ]]; then
+  echo "    Copying wheels from vendor/wheels..."
+  cp "$DEFAULT_WHEEL_DIR"/*.whl "${BUILD_ROOT}${INSTALL_DIR}/wheels/" 2>/dev/null || true
 else
-  echo "    WARNING: No local wheels found, will download from PyPI"
-  echo "    For offline installations, ensure vendor/wheels directory exists"
+  echo "    Downloading wheels from PyPI..."
+  python3 -m pip download -d "${BUILD_ROOT}${INSTALL_DIR}/wheels" -r "${SCRIPT_DIR}/requirements.txt"
 fi
 
-export PIP_DISABLE_PIP_VERSION_CHECK=1
-VENV_PIP="${BUILD_ROOT}${INSTALL_DIR}/venv/bin/pip"
-
-# Install setuptools and wheel first
-if [[ -n "$WHEEL_DIR" ]]; then
-  $VENV_PIP install $PIP_OPTS -q setuptools wheel 2>/dev/null || {
-    echo "    WARNING: Failed to install from local wheels, trying PyPI..."
-    $VENV_PIP install -q setuptools wheel
-  }
+# Verify we have wheels
+WHEEL_COUNT=$(ls -1 "${BUILD_ROOT}${INSTALL_DIR}/wheels"/*.whl 2>/dev/null | wc -l)
+if [[ $WHEEL_COUNT -eq 0 ]]; then
+  echo "    WARNING: No wheels bundled - installation will require internet"
 else
-  $VENV_PIP install -q setuptools wheel
+  echo "    Bundled $WHEEL_COUNT wheel files"
 fi
-
-# Install requirements from local wheels (offline mode)
-if [[ -n "$WHEEL_DIR" ]]; then
-  echo "    Installing dependencies from local wheels (offline mode)..."
-  $VENV_PIP install $PIP_OPTS -q -r "${SCRIPT_DIR}/requirements.txt" 2>/dev/null || {
-    echo "    WARNING: Failed to install from local wheels, trying PyPI..."
-    $VENV_PIP install -q -r "${SCRIPT_DIR}/requirements.txt"
-  }
-else
-  echo "    Installing dependencies from PyPI (requires internet)..."
-  $VENV_PIP install -q -r "${SCRIPT_DIR}/requirements.txt"
-fi
-
-echo "    Dependencies installed into venv."
-
-# Verify all required packages are installed
-echo "    Verifying installed packages..."
-MISSING_PKGS=""
-for pkg in Flask prometheus_client psutil requests PyYAML; do
-  if ! $VENV_PIP show "$pkg" >/dev/null 2>&1; then
-    MISSING_PKGS="$MISSING_PKGS $pkg"
-  fi
-done
-
-if [[ -n "$MISSING_PKGS" ]]; then
-  echo "    ERROR: Missing packages:$MISSING_PKGS"
-  echo "    Agent package may not work offline!"
-  exit 1
-fi
-
-echo "    All required packages verified."
-
-# Remove pip/setuptools cache to reduce size
-rm -rf "${BUILD_ROOT}${INSTALL_DIR}/venv/share" 2>/dev/null || true
-find "${BUILD_ROOT}${INSTALL_DIR}/venv" -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
-find "${BUILD_ROOT}${INSTALL_DIR}/venv" -name '*.pyc' -delete 2>/dev/null || true
 
 # --- 4. Create wrapper scripts that use the bundled venv ---
 cat > "${BUILD_ROOT}${INSTALL_DIR}/run-heartbeat.sh" <<'WRAPPER'
@@ -184,10 +135,12 @@ Description: PatchMaster Agent (self-contained)
  No internet required on target hosts.
 EOF
 
-# --- 6. DEBIAN/postinst — create user, dirs, fix venv paths ---
+# --- 6. DEBIAN/postinst — create user, dirs, install dependencies ---
 cat > "${BUILD_ROOT}/DEBIAN/postinst" <<'POSTINST'
 #!/bin/bash
 set -e
+
+echo "Installing PatchMaster Agent..."
 
 # Create service user if not exists
 if ! id -u patchagent >/dev/null 2>&1; then
@@ -200,27 +153,80 @@ mkdir -p /var/lib/patch-agent/snapshots
 mkdir -p /var/lib/patch-agent/offline-debs
 mkdir -p /etc/patch-agent
 
-# Fix virtualenv paths (they contain the build host path; rewrite to target)
+# Create fresh virtualenv on target machine
 VENV_DIR="/opt/patch-agent/venv"
-if [ -f "${VENV_DIR}/bin/activate" ]; then
-    sed -i "s|VIRTUAL_ENV=.*|VIRTUAL_ENV=\"${VENV_DIR}\"|g" "${VENV_DIR}/bin/activate" 2>/dev/null || true
+echo "Creating Python virtualenv..."
+python3 -m venv "$VENV_DIR"
+
+# Install dependencies from bundled wheels
+echo "Installing Python dependencies..."
+if [ -d "/opt/patch-agent/wheels" ] && [ -n "$(ls -A /opt/patch-agent/wheels/*.whl 2>/dev/null)" ]; then
+    echo "  Using bundled wheels (offline mode)"
+    "$VENV_DIR/bin/pip" install --no-index --find-links /opt/patch-agent/wheels -r /opt/patch-agent/requirements.txt 2>&1 | grep -v "^Looking in" || true
+else
+    echo "  Downloading from PyPI (requires internet)"
+    "$VENV_DIR/bin/pip" install -r /opt/patch-agent/requirements.txt
 fi
-# Fix shebang lines in venv/bin scripts
-find "${VENV_DIR}/bin" -type f -exec grep -l "^#!.*python" {} \; 2>/dev/null | while read f; do
-    sed -i "1s|^#!.*python.*|#!${VENV_DIR}/bin/python3|" "$f" 2>/dev/null || true
+
+# Verify Python dependencies
+echo "Verifying Python dependencies..."
+MISSING=""
+ALL_OK=1
+for pkg in flask prometheus_client psutil requests yaml; do
+    if "$VENV_DIR/bin/python3" -c "import $pkg" 2>/dev/null; then
+        echo "  ✓ $pkg"
+    else
+        echo "  ✗ $pkg - MISSING"
+        MISSING="$MISSING $pkg"
+        ALL_OK=0
+    fi
 done
 
+if [ $ALL_OK -eq 0 ]; then
+    echo ""
+    echo "ERROR: Missing dependencies:$MISSING"
+    echo "Attempting to install from PyPI..."
+    if "$VENV_DIR/bin/pip" install Flask prometheus_client psutil requests PyYAML; then
+        echo "Dependencies installed successfully from PyPI"
+    else
+        echo "FAILED: Could not install dependencies"
+        echo "Manual fix: sudo $VENV_DIR/bin/pip install Flask prometheus_client psutil requests PyYAML"
+        exit 1
+    fi
+fi
+
+# Set ownership
+chown -R patchagent:patchagent /opt/patch-agent
+chown -R patchagent:patchagent /var/log/patch-agent
+chown -R patchagent:patchagent /var/lib/patch-agent
+
+# Allow patchagent user to restart its own service (for watchdog)
+if [ -d /etc/sudoers.d ]; then
+    cat > /etc/sudoers.d/patch-agent <<'SUDOERS'
+# Allow patch-agent heartbeat to restart the agent service
+patchagent ALL=(ALL) NOPASSWD: /bin/systemctl restart patch-agent.service
+patchagent ALL=(ALL) NOPASSWD: /bin/systemctl status patch-agent.service
+SUDOERS
+    chmod 0440 /etc/sudoers.d/patch-agent
+fi
+
+# Reload systemd and enable services
 if command -v systemctl >/dev/null 2>&1; then
     systemctl daemon-reload 2>/dev/null || true
     systemctl enable patch-agent.service 2>/dev/null || true
     systemctl enable patch-agent-heartbeat.service 2>/dev/null || true
-    systemctl restart patch-agent.service 2>/dev/null || true
-    systemctl restart patch-agent-heartbeat.service 2>/dev/null || true
 fi
 
-echo "PatchMaster Agent installed to /opt/patch-agent"
-echo "Use install.sh or configure manually:"
-echo "  echo 'CONTROLLER_URL=http://<master>:8000' > /etc/patch-agent/env"
+echo ""
+echo "✓ PatchMaster Agent installed successfully!"
+echo ""
+echo "Configuration:"
+echo "  sudo nano /etc/patch-agent/env"
+echo "  Set: CONTROLLER_URL=http://<server-ip>:8000"
+echo ""
+echo "Start services:"
+echo "  sudo systemctl start patch-agent patch-agent-heartbeat"
+echo ""
 POSTINST
 chmod 755 "${BUILD_ROOT}/DEBIAN/postinst"
 

@@ -1,0 +1,12 @@
+{
+  "id": "7a7cd0fe",
+  "name": "test-agent",
+  "description": "Test agent repo",
+  "visibility": "internal",
+  "default_branch": "main",
+  "created_at": "2026-04-15T07:58:58.800625",
+  "updated_at": "2026-04-15T07:58:58.800625",
+  "owner": "admin",
+  "collaborators": [],
+  "forked_from": null
+}

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Deleted Customers{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h4 class="mb-0 fw-bold"><i class="bi bi-trash-fill text-danger"></i> Deleted Customers</h4>
+    <small class="text-muted">Soft-deleted customers — their license keys remain valid until expiry</small>
+  </div>
+  <a href="{{ url_for('customers_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Active Customers</a>
+</div>
+
+{% if not customers %}
+<div class="empty-state card-dark p-5 text-center">
+  <i class="bi bi-trash" style="font-size:3rem;color:#475569"></i>
+  <p class="mt-3 text-muted">No deleted customers.</p>
+</div>
+{% else %}
+<div class="d-flex flex-column gap-4">
+  {% for c in customers %}
+  <div class="card-dark p-4">
+    <div class="d-flex justify-content-between align-items-start mb-3">
+      <div>
+        <h5 class="mb-0 fw-bold text-danger"><i class="bi bi-person-x-fill me-2"></i>{{ c['name'] }}</h5>
+        <small class="text-muted">{{ c['company'] or 'Individual' }} &middot; {{ c['email'] }}</small>
+      </div>
+      <div class="text-end">
+        <span class="badge badge-revoked">Deleted</span>
+        <div class="text-muted small mt-1">Deleted: {{ c['updated_at'][:10] }}</div>
+      </div>
+    </div>
+
+    {% set lics = customer_licenses.get(c['id'], []) %}
+    {% if lics %}
+    <h6 class="fw-bold mb-2 text-muted"><i class="bi bi-key-fill text-warning me
+-2"></i> License Keys ({{ lics|length }})</h6>
+    <div class="table-responsive">
+      <table class="table table-dark-custom table-sm mb-0">
+        <thead>
+          <tr>
+            <th>License ID</th>
+            <th>Tier</th>
+            <th>Plan</th>
+            <th>Issued</th>
+            <th>Expires</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in lics %}
+          <tr>
+            <td class="font-monospace small">{{ l['license_id'] }}</td>
+            <td><span class="badge badge-tier-{{ l['tier'] }}">{{ tiers[l['tier']]['label'] }}</span></td>
+            <td>{{ plans[l['plan']]['label'] }}</td>
+            <td>{{ l['issued_at'][:10] }}</td>
+            <td>
+              <span class="{% if l['expires_at'] < now %}text-danger{% else %}text-success{% endif %} fw-bold">
+                {{ l['expires_at'][:10] }}
+              </span>
+              {% if l['expires_at'] >= now and not l['is_revoked'] %}
+                <span class="badge badge-active ms-1">Still Valid</span>
+              {% elif l['is_revoked'] %}
+                <span class="badge badge-revoked ms-1">Revoked</span>
+              {% else %}
+                <span class="badge badge-expired ms-1">Expired</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if l['is_revoked'] %}<span class="badge badge-revoked">Revoked</span>
+              {% elif l['expires_at'] < now %}<span class="badge badge-expired">Expired</span>
+              {% else %}<span class="badge badge-active">Active</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted small mb-0">No license keys for this customer.</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

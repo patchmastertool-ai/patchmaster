@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PatchMaster Internal License And Release Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #334155;
+      --border: #475569;
+      --ink: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --purple: #818cf8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 40px 48px 32px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, #0f172a 0%, #1a2744 100%);
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 10px;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 1rem;
+      max-width: 880px;
+      line-height: 1.7;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 6px;
+      margin-bottom: 14px;
+    }
+    .badge-blue   { background: rgba(56,189,248,0.15);  color: var(--accent);  border: 1px solid rgba(56,189,248,0.3); }
+    .badge-green  { background: rgba(52,211,153,0.15);  color: var(--green);   border: 1px solid rgba(52,211,153,0.3); }
+    .badge-amber  { background: rgba(251,191,36,0.15);  color: var(--amber);   border: 1px solid rgba(251,191,36,0.3); }
+    .badge-purple { background: rgba(129,140,248,0.15); color: var(--purple);  border: 1px solid rgba(129,140,248,0.3); }
+
+    main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 40px 48px 80px;
+    }
+
+    .diagram-block {
+      margin-bottom: 48px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .diagram-header {
+      padding: 20px 28px 16px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(90deg, rgba(56,189,248,0.05) 0%, transparent 100%);
+    }
+
+    .diagram-header h2 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .diagram-header h2 .num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: rgba(56,189,248,0.2);
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .diagram-header p {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.6;
+      padding-left: 38px;
+    }
+
+    .diagram-body {
+      padding: 28px;
+      overflow-x: auto;
+      overflow-y: visible;
+      background: #fff;
+    }
+
+    .instructions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+      padding: 28px;
+    }
+
+    .instr-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+
+    .instr-card strong {
+      display: block;
+      color: var(--accent);
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .instr-card ol, .instr-card ul {
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 0.875rem;
+      line-height: 1.8;
+    }
+
+    .instr-card li + li { margin-top: 5px; }
+
+    .instr-card code {
+      background: rgba(56,189,248,0.1);
+      color: var(--accent);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: Consolas, monospace;
+      font-size: 0.82rem;
+    }
+
+    .note-block {
+      margin: 0;
+      padding: 20px 28px;
+      background: rgba(251,191,36,0.07);
+      border-left: 3px solid var(--amber);
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.7;
+    }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 24px 48px;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+
+    @media (max-width: 768px) {
+      header { padding: 24px; }
+      main   { padding: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <span class="badge badge-blue">Ed25519 Signing</span>
+      <span class="badge badge-purple">X25519 Encryption</span>
+      <span class="badge badge-green">Argon2 Auth</span>
+      <span class="badge badge-amber">PM2 License Format</span>
+    </div>
+    <h1>License &amp; Release Architecture</h1>
+    <p>Internal reference for the release flow, offline PM2 license model, installation paths, trust boundaries, and exact operator deployment instructions. Updated to reflect Ed25519 signing, X25519 encryption, and the PostgreSQL 17 / Argon2 vendor portal migration.</p>
+  </header>
+
+  <main>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">1</span> Build &amp; Artifact Flow</h2>
+        <p>How the license authority set is generated and distributed across tarballs during a release build.</p>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart TD
+    A["Run build_release.py / build-stable.sh"] --> B["Generate or reuse license authority set\nEd25519 signing + X25519 encryption"]
+    B --> C["Write internal recovery copy\ndist/private/patchmaster-license-authority.env"]
+    B --> D["Write internal product runtime copy\ndist/private/patchmaster-license-public.env"]
+    D --> E["Bundle runtime verification + decryption material\ninside customer product tarball"]
+    C --> F["Bundle private authority inside vendor tarball"]
+    A --> G["Export developer folder\ndist/developer/patchmaster-developer-kit-2.0.0/"]
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">2</span> What Goes Where</h2>
+        <p>Which artifact lands on which server and why.</p>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart LR
+    A["Customer Product Tarball"] --> B["patchmaster-product-2.0.0.tar.gz\nincludes runtime license bundle only"]
+    C["Vendor Tarball"]           --> D["patchmaster-vendor-2.0.0.tar.gz\nincludes private authority bundle"]
+    E["Internal Recovery Files"] --> F["dist/private/\nruntime + authority recovery copies"]
+
+    B --> G["PatchMaster Server"]
+    D --> H["Vendor Server"]
+    F --> I["Operator secure storage"]
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">3</span> PatchMaster Install Flow</h2>
+        <p>How the runtime license bundle gets installed on a PatchMaster server from the customer product tarball.</p>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart TD
+    A["Operator copies customer product tarball"] --> B["Extract patchmaster-product-2.0.0.tar.gz"]
+    B --> C["Run packaging/install-bare.sh"]
+    C --> D["Installer reads bundled patchmaster-license-public.env"]
+    D --> E["Writes LICENSE_VERIFY_PUBLIC_KEY + LICENSE_DECRYPT_PRIVATE_KEY\ninto PatchMaster env"]
+    E --> F["PatchMaster verifies and decrypts licenses locally"]
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">4</span> Vendor Install Flow</h2>
+        <p>How the private signing authority gets installed on a Vendor server from the internal vendor tarball.</p>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart TD
+    A["Operator copies vendor tarball"] --> B["Extract patchmaster-vendor-2.0.0.tar.gz"]
+    B --> C["Run install-vendor.sh"]
+    C --> D["Installer reads bundled patchmaster-license-authority.env"]
+    D --> E["Writes LICENSE_SIGN_PRIVATE_KEY + LICENSE_ENCRYPT_PUBLIC_KEY\ninto Vendor env"]
+    E --> F["Writes matching runtime compatibility keys into Vendor env"]
+    F --> G["Vendor can generate PM2 licenses"]
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">5</span> Runtime License Flow</h2>
+        <p>End-to-end flow from Vendor customer record creation through final PM2 license activation in PatchMaster.</p>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart TD
+    A["Vendor records customer and purchase"] --> B["Issue POC or testing license"]
+    B --> C["Customer activates testing license in PatchMaster"]
+    C --> D["Customer shares verified hardware or MAC ID with Vendor"]
+    D --> E["Vendor updates customer record with final binding ID"]
+    E --> F["Vendor generates final bound PM2 license"]
+    F --> G["Customer activates final PM2 in PatchMaster"]
+    H["PatchMaster runtime license bundle"] --> I["Verify Ed25519 signature\nand decrypt claims locally"]
+    G --> I
+    I -->|Valid| J["License accepted"]
+    I -->|Invalid| K["Signature, decrypt, or binding validation failed"]
+        </div>
+      </div>
+      <div class="note-block">
+        PatchMaster verifies and decrypts licenses <strong>locally</strong> using its bundled runtime material. The Vendor portal does not need to be reachable at runtime. Hardware or MAC ID binding is recorded in the Vendor portal before the final license is generated.
+      </div>
+    </div>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">6</span> Trust Boundary</h2>
+        <p>What each package can and cannot do — ensuring only Vendor-side operators can mint new licenses.</p>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart TD
+    A["Customer Product Tarball"] --> B["Contains runtime verification\nand decryption bundle only"]
+    C["Vendor Tarball"]           --> D["Contains private signing authority"]
+    E["dist/private copies"]     --> F["Recovery only — never customer-facing"]
+    B --> G["Customer cannot mint licenses from product package"]
+    D --> H["Only vendor side can mint new valid licenses"]
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">7</span> Safe Usage Rule</h2>
+        <p>How to ensure Vendor and PatchMaster always share the same license authority set.</p>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart TD
+    A["Need Vendor and PatchMaster to work together"] --> B["Use product and vendor packages\nthat share the same license authority set"]
+    B --> C["Vendor signs with the matching private key"]
+    B --> D["PatchMaster verifies and decrypts\nwith the matching runtime bundle"]
+    C --> E["New PM2 licenses validate correctly"]
+    D --> E
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">8</span> Transition Compatibility</h2>
+        <p>Legacy license formats remain supported during the PM2 migration window.</p>
+      </div>
+      <div class="diagram-body">
+        <div class="mermaid">
+flowchart TD
+    A["Old HMAC / shared-secret licenses"] --> B["Still supported as fallback"]
+    C["Legacy PM1 signed licenses"]         --> D["Still readable during transition"]
+    E["New licenses"]                        --> F["Use PM2 encrypted + signed format"]
+    B --> G["Transition compatibility path"]
+    D --> G
+    F --> H["Preferred production path"]
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-block">
+      <div class="diagram-header">
+        <h2><span class="num">9</span> Operator Instructions</h2>
+      </div>
+      <div class="instructions-grid">
+        <div class="instr-card">
+          <strong>Internal Deployment</strong>
+          <ol>
+            <li>Run <code>bash scripts/build-stable.sh</code>.</li>
+            <li>Keep <code>dist/private/patchmaster-license-authority.env</code> private.</li>
+            <li>Send <code>dist/patchmaster-product-2.0.0.tar.gz</code> to the PatchMaster server.</li>
+            <li>Send <code>vendor/dist/patchmaster-vendor-2.0.0.tar.gz</code> to the Vendor server.</li>
+          </ol>
+        </div>
+        <div class="instr-card">
+          <strong>PatchMaster Server</strong>
+          <ol>
+            <li>Extract the customer product tarball.</li>
+            <li>Run <code>bash packaging/install-bare.sh --with-monitoring</code>.</li>
+            <li>PatchMaster installs with the bundled runtime license bundle.</li>
+          </ol>
+        </div>
+        <div class="instr-card">
+          <strong>Vendor Server</strong>
+          <ol>
+            <li>Extract the vendor tarball aligned to your license authority set.</li>
+            <li>Run <code>bash install-vendor.sh</code>.</li>
+            <li>Vendor installs with the private signing authority.</li>
+          </ol>
+        </div>
+        <div class="instr-card">
+          <strong>Release Hygiene Rules</strong>
+          <ul>
+            <li>Never give <code>patchmaster-license-authority.env</code> to customers.</li>
+            <li>Keep product and vendor packages on the same license authority set.</li>
+            <li>Use a testing license first for POC hardware binding.</li>
+            <li>Record hardware/MAC ID in Vendor portal before the final license.</li>
+            <li>Vendor internet exposure is NOT required for license verification.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    License &amp; Release Architecture &bull;
+    <code>docs/internal/diagrams/license-workflow-diagrams.html</code> &bull;
+    Also see: <code>platform-feature-diagrams.html</code> &bull; <code>provisioning-vs-network-boot.html</code>
+  </footer>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "default",
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: "basis" },
+      themeVariables: {
+        fontSize: '15px',
+        primaryColor: '#dbeafe',
+        primaryTextColor: '#0f172a',
+        primaryBorderColor: '#3b82f6',
+        lineColor: '#475569',
+        secondaryColor: '#f0fdf4',
+        tertiaryColor: '#fefce8',
+        background: '#ffffff'
+      }
+    });
+  </script>
+</body>
+</html>

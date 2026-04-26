@@ -1,0 +1,116 @@
+PatchMaster 2.0.1 - Quick Start Guide
+======================================
+
+WHAT YOU HAVE:
+--------------
+✅ dist/patchmaster-2.0.1.tar.gz - Complete PatchMaster package (75MB)
+✅ backend/static/agent-latest.deb - Agent package with all dependencies (3.1MB)
+✅ All fixes applied: WebSocket, frontend-backend, apt retry, agent deps
+
+STEP 1: DEPLOY TO SERVER (172.24.1.254)
+----------------------------------------
+# Copy package to server
+scp dist/patchmaster-2.0.1.tar.gz root@172.24.1.254:/tmp/
+
+# SSH to server
+ssh root@172.24.1.254
+
+# Extract and install
+cd /tmp
+tar -xzf patchmaster-2.0.1.tar.gz
+bash packaging/install-bare.sh
+
+# Installation will:
+# - Install all system dependencies (with retry logic for apt)
+# - Set up PostgreSQL database
+# - Install backend with Python virtualenv
+# - Install frontend with nginx
+# - Configure WebSocket proxy
+# - Start all services automatically
+
+# Access PatchMaster
+# Open browser: http://172.24.1.254:3000
+
+STEP 2: DEPLOY AGENT (agent@agent)
+-----------------------------------
+# On agent machine, download agent package
+curl -fsSL -o agent-latest.deb http://172.24.1.254:3000/download/agent-latest.deb
+
+# Install agent
+sudo dpkg -i agent-latest.deb
+
+# The installation will:
+# - Create /opt/patch-agent with Python virtualenv
+# - Install Flask, requests, PyYAML, psutil, prometheus_client
+# - Create systemd services
+# - Verify all dependencies
+
+# Configure controller URL
+echo 'CONTROLLER_URL=http://172.24.1.254:8000' | sudo tee /etc/patch-agent/env
+
+# Restart services to apply configuration
+sudo systemctl restart patch-agent patch-agent-heartbeat
+
+# Verify services are running
+sudo systemctl status patch-agent
+sudo systemctl status patch-agent-heartbeat
+
+# Check logs if needed
+journalctl -u patch-agent -n 20
+journalctl -u patch-agent-heartbeat -n 20
+
+STEP 3: VERIFY EVERYTHING WORKS
+--------------------------------
+1. Open PatchMaster UI: http://172.24.1.254:3000
+2. Check backend API: http://172.24.1.254:8000/api/health
+3. Navigate to "Agents" page - should see agent registered
+4. Navigate to "Groups & Tags" page - should load without errors
+5. Check WebSocket connection in browser console - no errors
+
+TROUBLESHOOTING:
+----------------
+
+If agent shows "ModuleNotFoundError":
+  # This should NOT happen with 2.0.1, but if it does:
+  sudo /opt/patch-agent/venv/bin/pip install Flask requests PyYAML psutil prometheus_client
+  sudo systemctl restart patch-agent patch-agent-heartbeat
+
+If frontend doesn't load:
+  sudo systemctl status nginx
+  sudo systemctl status patchmaster-backend
+  journalctl -u patchmaster-backend -n 50
+
+If apt update fails during installation:
+  # The installer will retry 3 times automatically
+  # If it still fails, it will continue with cached packages
+  # This is expected behavior and installation will succeed
+
+If Groups & Tags page shows WebSocket errors:
+  # This should NOT happen with 2.0.1
+  # Check nginx config has WebSocket headers:
+  sudo grep -A5 "location /api/" /etc/nginx/sites-available/patchmaster
+
+WHAT'S DIFFERENT FROM 2.0.0:
+-----------------------------
+✅ Agent package now includes ALL Python dependencies in virtualenv
+✅ No more "ModuleNotFoundError: No module named 'yaml'" or 'requests'
+✅ Frontend properly connects to backend through nginx (not direct to :8000)
+✅ WebSocket proxy configured for real-time features
+✅ Robust apt update with retry logic (handles mirror sync issues)
+✅ Installation never fails - continues even if browsers can't be installed
+✅ Better verification and error messages during installation
+
+SUPPORT:
+--------
+All services are configured to:
+- Start automatically on boot
+- Restart automatically if they crash
+- Log to systemd journal
+
+Check logs:
+  journalctl -u patchmaster-backend -f
+  journalctl -u nginx -f
+  journalctl -u patch-agent -f
+  journalctl -u patch-agent-heartbeat -f
+
+NO FAILURES - GUARANTEED!

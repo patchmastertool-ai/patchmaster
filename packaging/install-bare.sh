@@ -1649,8 +1649,14 @@ if [[ -f "$INSTALL_DIR/backend/scripts/monitoring-ctl.sh" ]]; then
     chmod 755 "$INSTALL_DIR/backend/scripts/monitoring-ctl.sh" || true
 fi
 
-# Ensure license.key file (if present) is owned by patchmaster and has correct permissions
-if [[ -f "$INSTALL_DIR/license.key" ]]; then
+# Copy license.key from package if present
+if [[ -f "$PROJECT_ROOT/license.key" ]]; then
+    log "  Installing bundled license key..."
+    cp "$PROJECT_ROOT/license.key" "$INSTALL_DIR/license.key"
+    chown $SVC_USER:$SVC_GROUP "$INSTALL_DIR/license.key"
+    chmod 644 "$INSTALL_DIR/license.key"
+elif [[ -f "$INSTALL_DIR/license.key" ]]; then
+    # Ensure existing license.key has correct permissions
     chown $SVC_USER:$SVC_GROUP "$INSTALL_DIR/license.key"
     chmod 644 "$INSTALL_DIR/license.key"
 fi

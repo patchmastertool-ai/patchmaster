@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h4 class="mb-0 fw-bold">Dashboard</h4>
+    <small class="text-muted">Overview of customers, purchases & licenses</small>
+  </div>
+  <div>
+    <a href="{{ url_for('customer_new') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> New Customer</a>
+    <a href="{{ url_for('purchase_new') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-cart-plus"></i> New Purchase</a>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon" style="background:rgba(56,189,248,0.15);color:#38bdf8">
+          <i class="bi bi-people-fill"></i>
+        </div>
+        <div>
+          <div class="stat-value">{{ stats.total_customers }}</div>
+          <div class="stat-label">Total Customers</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon" style="background:rgba(56,189,248,0.15);color:#38bdf8">
+          <i class="bi bi-cart-check-fill"></i>
+        </div>
+        <div>
+          <div class="stat-value">{{ stats.total_purchases }}</div>
+          <div class="stat-label">Total Purchases</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon" style="background:rgba(168,85,247,0.15);color:#a855f7">
+          <i class="bi bi-key-fill"></i>
+        </div>
+        <div>
+          <div class="stat-value">{{ stats.active_licenses }}</div>
+          <div class="stat-label">Active Licenses</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon" style="background:rgba(245,158,11,0.15);color:#fbbf24">
+          <i class="bi bi-currency-dollar"></i>
+        </div>
+        <div>
+          <div class="stat-value">${{ "%.0f"|format(stats.total_revenue) }}</div>
+          <div class="stat-label">Total Revenue</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Second row stats -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon" style="background:rgba(56,189,248,0.15);color:#38bdf8"><i class="bi bi-check-circle"></i></div>
+        <div><div class="stat-value">{{ stats.active_customers }}</div><div class="stat-label">Active Customers</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon" style="background:rgba(56,189,248,0.15);color:#38bdf8"><i class="bi bi-key"></i></div>
+        <div><div class="stat-value">{{ stats.total_licenses }}</div><div class="stat-label">Total Licenses</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon" style="background:rgba(245,158,11,0.15);color:#fbbf24"><i class="bi bi-clock"></i></div>
+        <div><div class="stat-value">{{ stats.expired_licenses }}</div><div class="stat-label">Expired Licenses</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon" style="background:rgba(255,153,147,0.15);color:#ff9993"><i class="bi bi-x-circle"></i></div>
+        <div><div class="stat-value">{{ stats.revoked_licenses }}</div><div class="stat-label">Revoked Licenses</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Tier Distribution -->
+  <div class="col-md-4">
+    <div class="card-dark p-3">
+      <h6 class="fw-bold mb-3"><i class="bi bi-pie-chart-fill text-primary"></i> License Tier Distribution</h6>
+      {% if tier_dist %}
+        {% for row in tier_dist %}
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span><span class="badge badge-tier-{{ row['tier'] }}">{{ tiers[row['tier']]['label'] }}</span></span>
+            <span class="fw-bold">{{ row['cnt'] }}</span>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="text-muted small mb-0">No licenses yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Recent Purchases -->
+  <div class="col-md-8">
+    <div class="card-dark p-3">
+      <h6 class="fw-bold mb-3"><i class="bi bi-cart-fill text-success"></i> Recent Purchases</h6>
+      {% if recent_purchases %}
+        <div class="table-responsive">
+          <table class="table table-dark-custom table-sm mb-0">
+            <thead><tr><th>Customer</th><th>Tier</th><th>Plan</th><th>Amount</th><th>Date</th></tr></thead>
+            <tbody>
+              {% for p in recent_purchases %}
+              <tr>
+                <td>{{ p['customer_name'] }}{% if p['company'] %} <small class="text-muted">({{ p['company'] }})</small>{% endif %}</td>
+                <td><span class="badge badge-tier-{{ p['tier'] }}">{{ tiers[p['tier']]['label'] }}</span></td>
+                <td>{{ plans[p['plan']]['label'] }}</td>
+                <td>${{ "%.2f"|format(p['amount']) }}</td>
+                <td class="text-muted">{{ p['purchased_at'][:10] }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-muted small mb-0">No purchases yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card-dark p-3 mt-3">
+  <h6 class="fw-bold mb-3"><i class="bi bi-clock-history text-info"></i> Recent Activity</h6>
+  {% if recent %}
+    <div class="table-responsive">
+      <table class="table table-dark-custom table-sm mb-0">
+        <thead><tr><th>Action</th><th>Details</th><th>Time</th></tr></thead>
+        <tbody>
+          {% for log in recent %}
+          <tr>
+            <td><span class="badge bg-secondary">{{ log['action'] }}</span></td>
+            <td>{{ log['details'] }}</td>
+            <td class="text-muted">{{ log['created_at'] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-muted small mb-0">No activity yet.</p>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}{% endblock %}

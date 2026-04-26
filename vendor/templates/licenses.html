@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Licenses{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h4 class="mb-0 fw-bold">Licenses</h4>
+    <small class="text-muted">All generated license keys</small>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card-dark p-3 mb-3">
+  <form method="GET" class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label small text-muted">Status</label>
+      <select name="status" class="form-select form-select-sm">
+        <option value="">All</option>
+        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+        <option value="expired" {% if status_filter == 'expired' %}selected{% endif %}>Expired</option>
+        <option value="revoked" {% if status_filter == 'revoked' %}selected{% endif %}>Revoked</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small text-muted">Tier</label>
+      <select name="tier" class="form-select form-select-sm">
+        <option value="">All Tiers</option>
+        {% for key, t in tiers.items() %}
+        <option value="{{ key }}" {% if tier_filter == key %}selected{% endif %}>{{ t['label'] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-outline-primary btn-sm w-100"><i class="bi bi-filter"></i> Filter</button>
+    </div>
+  </form>
+</div>
+
+{% if licenses %}
+<div class="card-dark">
+  <div class="table-responsive">
+    <table class="table table-dark-custom table-hover mb-0">
+      <thead>
+        <tr><th>License ID</th><th>Customer</th><th>Tier</th><th>Hardware ID</th><th>Issued</th><th>Expires</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for l in licenses %}
+        <tr>
+          <td class="font-monospace">{{ l['license_id'] }}</td>
+          <td>
+            <a href="{{ url_for('customer_detail', cid=l['customer_id']) }}" class="text-decoration-none text-info">{{ l['customer_name'] }}</a>
+            {% if l['company'] %}<br><small class="text-muted">{{ l['company'] }}</small>{% endif %}
+          </td>
+          <td><span class="badge badge-tier-{{ l['tier'] }}">{{ tiers[l['tier']]['label'] }}</span></td>
+          <td class="font-monospace small text-muted">{{ l['hw_id'] or '—' }}</td>
+          <td class="text-muted">{{ l['issued_at'][:10] }}</td>
+          <td class="text-muted">{{ l['expires_at'][:10] }}</td>
+          <td>
+            {% if l['is_revoked'] %}<span class="badge badge-revoked">Revoked</span>
+            {% elif l['expires_at'] < now %}<span class="badge badge-expired">Expired</span>
+            {% else %}<span class="badge badge-active">Active</span>{% endif %}
+          </td>
+          <td><a href="{{ url_for('license_detail', lid=l['id']) }}" class="btn btn-sm btn-outline-light"><i class="bi bi-eye"></i></a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty-state">
+  <i class="bi bi-key"></i>
+  <h5>No licenses found</h5>
+  <p class="text-muted">Licenses are generated automatically when you record a purchase.</p>
+</div>
+{% endif %}
+{% endblock %}

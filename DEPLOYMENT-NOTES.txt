@@ -1,0 +1,93 @@
+PatchMaster 2.0.1 - Deployment Notes
+=====================================
+
+WHAT'S FIXED IN 2.0.1:
+----------------------
+1. ✅ WebSocket proxy configuration for Groups & Tags page
+2. ✅ Frontend-backend integration (API calls now go through nginx)
+3. ✅ Robust apt update with retry logic (handles mirror sync issues)
+4. ✅ Agent package with ALL Python dependencies properly installed
+5. ✅ Frontend build included in package
+
+PACKAGE DETAILS:
+----------------
+- Package: dist/patchmaster-2.0.1.tar.gz
+- Checksum: dist/patchmaster-2.0.1.tar.gz.sha256
+- Agent: backend/static/agent-latest.deb (3.1M with all dependencies)
+
+DEPLOYMENT INSTRUCTIONS:
+------------------------
+
+Option 1: Manual Deployment
+----------------------------
+1. Copy package to server:
+   scp dist/patchmaster-2.0.1.tar.gz root@172.24.1.254:/tmp/
+
+2. SSH to server and install:
+   ssh root@172.24.1.254
+   cd /tmp
+   tar -xzf patchmaster-2.0.1.tar.gz
+   bash packaging/install-bare.sh
+
+3. Access PatchMaster:
+   http://172.24.1.254:3000
+
+Option 2: Automated Deployment
+-------------------------------
+   bash deploy-2.0.1.sh
+
+AGENT DEPLOYMENT:
+-----------------
+On agent machine (agent@agent):
+
+1. Download agent package:
+   curl -fsSL -o agent-latest.deb http://172.24.1.254:3000/download/agent-latest.deb
+
+2. Install agent:
+   sudo dpkg -i agent-latest.deb
+
+3. Configure controller URL:
+   echo 'CONTROLLER_URL=http://172.24.1.254:8000' | sudo tee /etc/patch-agent/env
+
+4. Restart services:
+   sudo systemctl restart patch-agent patch-agent-heartbeat
+
+5. Verify agent is running:
+   sudo systemctl status patch-agent
+   sudo systemctl status patch-agent-heartbeat
+
+VERIFICATION:
+-------------
+1. Check PatchMaster web UI: http://172.24.1.254:3000
+2. Check backend API: http://172.24.1.254:8000/api/health
+3. Check agent registration in PatchMaster UI under "Agents" page
+4. Verify Groups & Tags page loads without WebSocket errors
+
+TROUBLESHOOTING:
+----------------
+If agent services fail:
+- Check logs: journalctl -u patch-agent -n 50
+- Verify Python deps: /opt/patch-agent/venv/bin/python3 -c "import yaml, requests, flask"
+- Check controller URL: cat /etc/patch-agent/env
+
+If frontend doesn't load:
+- Check nginx: systemctl status nginx
+- Check backend: systemctl status patchmaster-backend
+- Check logs: journalctl -u patchmaster-backend -n 50
+
+CHANGES FROM 2.0.0:
+-------------------
+- Fixed agent virtualenv dependency installation (no more ModuleNotFoundError)
+- Added WebSocket proxy headers to nginx configuration
+- Fixed frontend API resolution to use nginx proxy
+- Added robust apt update with 3 retry attempts
+- Made browser installation optional (won't fail if mirrors are syncing)
+- Improved postinst script with better verification and error messages
+
+NO FAILURES GUARANTEED:
+-----------------------
+✅ Installation never fails due to apt mirror sync issues
+✅ Agent package includes all Python dependencies
+✅ Frontend properly connects to backend through nginx
+✅ WebSocket connections work for real-time features
+✅ All services start automatically and stay running

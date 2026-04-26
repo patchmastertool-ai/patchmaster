@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PatchRepo - Built-in Git Server</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --bg: #0f172a;
+            --bg-card: #1e293b;
+            --bg-input: #334155;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #475569;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .header h1 span {
+            color: var(--primary);
+        }
+        
+        .nav {
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .nav a {
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            transition: all 0.2s;
+        }
+        
+        .nav a:hover, .nav a.active {
+            color: var(--text);
+            background: var(--bg-input);
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background: var(--primary-dark);
+        }
+        
+        .btn-secondary {
+            background: var(--bg-input);
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 0.375rem;
+            color: var(--text);
+            font-size: 0.875rem;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .repo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1rem;
+        }
+        
+        .repo-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .repo-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+        
+        .repo-card h3 {
+            font-size: 1.125rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .repo-card p {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .badge-public { background: var(--success); }
+        .badge-private { background: var(--danger); }
+        .badge-internal { background: var(--warning); }
+        
+        .commit-list {
+            margin-top: 1rem;
+        }
+        
+        .commit {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .commit:last-child { border-bottom: none; }
+        
+        .commit-hash {
+            font-family: monospace;
+            background: var(--bg-input);
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            color: var(--primary);
+        }
+        
+        .commit-message {
+            flex: 1;
+            margin: 0 1rem;
+            font-size: 0.875rem;
+        }
+        
+        .commit-author {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+        
+        .branch-tag {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background: var(--primary);
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            margin-right: 0.5rem;
+        }
+        
+        .pr-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .pr-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .pr-title {
+            font-weight: 600;
+        }
+        
+        .pr-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+        }
+        
+        .pr-open { background: var(--success); }
+        .pr-merged { background: var(--primary); }
+        .pr-closed { background: var(--danger); }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .table th, .table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .table th {
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+        
+        .table tr:hover td {
+            background: var(--bg-input);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.75);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal.active { display: flex; }
+        
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 2rem;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-muted);
+        }
+        
+        .empty-state h2 {
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading {
+            width: 2rem;
+            height: 2rem;
+            border: 2px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1><span>⚡</span> PatchRepo</h1>
+        <nav>
+            <a href="#repos" class="active" onclick="showTab('repos')">Repositories</a>
+            <a href="#patches" onclick="showTab('patches')">Patches</a>
+            <a href="#pulls" onclick="showTab('pulls')">Pull Requests</a>
+        </nav>
+    </header>
+    
+    <main class="container">
+        <!-- Repositories Tab -->
+        <div id="repos" class="tab-content active">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2>Repositories</h2>
+                    <button class="btn" onclick="showModal('createRepo')">+ New Repository</button>
+                </div>
+                <div class="repo-grid" id="repoGrid">
+                    <div class="loading"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Patches Tab -->
+        <div id="patches" class="tab-content">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2>Patch Packages</h2>
+                    <button class="btn" onclick="showModal('uploadPatch')">+ Upload Patch</button>
+                </div>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Version</th>
+                            <th>Platform</th>
+                            <th>Uploaded</th>
+                            <th>Size</th>
+                        </tr>
+                    </thead>
+                    <tbody id="patchTable">
+                        <tr><td colspan="5" style="text-align: center; padding: 2rem;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Pull Requests Tab -->
+        <div id="pulls" class="tab-content">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2>Pull Requests</h2>
+                    <button class="btn" onclick="showModal('createPR')">+ New Pull Request</button>
+                </div>
+                <div id="prList">
+                    <div class="empty-state">
+                        <h2>No Pull Requests</h2>
+                        <p>Create a branch and open a PR to get started</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Repository Detail -->
+        <div id="repoDetail" class="tab-content">
+            <div class="card">
+                <button class="btn btn-secondary" onclick="showTab('repos')" style="margin-bottom: 1rem;">← Back</button>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2 id="detailRepoName">Repository Name</h2>
+                        <p id="detailRepoDesc" style="color: var(--text-muted);">Description</p>
+                    </div>
+                    <div>
+                        <span class="badge" id="detailRepoVisibility">public</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
+                <div class="card">
+                    <h3 style="margin-bottom: 1rem;">Commits</h3>
+                    <div class="commit-list" id="commitList">
+                        <div class="empty-state">No commits yet</div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="card">
+                        <h3 style="margin-bottom: 1rem;">Branches</h3>
+                        <div id="branchList"></div>
+                    </div>
+                    
+                    <div class="card" style="margin-top: 1rem;">
+                        <h3 style="margin-bottom: 1rem;">CI/CD</h3>
+                        <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1rem;">
+                            Webhook URL:<br>
+                            <code style="background: var(--bg-input); padding: 0.25rem; border-radius: 0.25rem;">
+                                /api/repos/<span id="webhookRepoId">...</span>/webhook
+                            </code>
+                        </p>
+                        <button class="btn btn-secondary" onclick="copyWebhook()">Copy URL</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Create Repo Modal -->
+    <div id="createRepoModal" class="modal">
+        <div class="modal-content">
+            <h2 style="margin-bottom: 1.5rem;">Create Repository</h2>
+            <form onsubmit="createRepo(event)">
+                <div class="form-group">
+                    <label>Repository Name</label>
+                    <input type="text" name="name" required placeholder="my-repo">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" rows="3" placeholder="What is this repo for?"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Visibility</label>
+                    <select name="visibility">
+                        <option value="private">Private - Only collaborators</option>
+                        <option value="internal">Internal - Organization only</option>
+                        <option value="public">Public - Anyone</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="hideModal('createRepo')">Cancel</button>
+                    <button type="submit" class="btn">Create Repository</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Create PR Modal -->
+    <div id="createPRModal" class="modal">
+        <div class="modal-content">
+            <h2 style="margin-bottom: 1.5rem;">Create Pull Request</h2>
+            <form onsubmit="createPR(event)">
+                <div class="form-group">
+                    <label>Title</label>
+                    <input type="text" name="title" required placeholder="Add new feature">
+                </div>
+                <div class="form-group">
+                    <label>Source Branch</label>
+                    <input type="text" name="source" required placeholder="feature-branch">
+                </div>
+                <div class="form-group">
+                    <label>Target Branch</label>
+                    <input type="text" name="target" value="main" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" rows="4" placeholder="Describe your changes..."></textarea>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="hideModal('createPR')">Cancel</button>
+                    <button type="submit" class="btn">Create Pull Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Upload Patch Modal -->
+    <div id="uploadPatchModal" class="modal">
+        <div class="modal-content">
+            <h2 style="margin-bottom: 1.5rem;">Upload Patch Package</h2>
+            <form onsubmit="uploadPatch(event)">
+                <div class="form-group">
+                    <label>Repository</label>
+                    <select name="repo_id" required>
+                        <option value="">Select repository...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Patch Name</label>
+                    <input type="text" name="name" required placeholder="patch-agent">
+                </div>
+                <div class="form-group">
+                    <label>Version</label>
+                    <input type="text" name="version" required placeholder="2.0.0">
+                </div>
+                <div class="form-group">
+                    <label>Platform</label>
+                    <select name="platform" required>
+                        <option value="linux">Linux</option>
+                        <option value="windows">Windows</option>
+                        <option value="solaris">Solaris</option>
+                        <option value="hpux">HP-UX</option>
+                        <option value="aix">AIX</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Package File</label>
+                    <input type="file" name="file" required>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="hideModal('uploadPatch')">Cancel</button>
+                    <button type="submit" class="btn">Upload</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8090/api';
+        let currentRepo = null;
+        
+        // Tab Navigation
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            document.querySelector(`.nav a[href="#${tabId}"]`).classList.add('active');
+            
+            if (tabId === 'repos') loadRepos();
+            if (tabId === 'patches') loadPatches();
+            if (tabId === 'pulls') loadPRs();
+        }
+        
+        // Modal
+        function showModal(modalId) {
+            document.getElementById(modalId + 'Modal').classList.add('active');
+        }
+        function hideModal(modalId) {
+            document.getElementById(modalId + 'Modal').classList.remove('active');
+        }
+        
+        // API Functions
+        async function loadRepos() {
+            const grid = document.getElementById('repoGrid');
+            try {
+                const res = await fetch(`${API_BASE}/repos`);
+                const repos = await res.json();
+                
+                if (repos.length === 0) {
+                    grid.innerHTML = `
+                        <div class="empty-state">
+                            <h2>No Repositories</h2>
+                            <p>Create your first repository to get started</p>
+                            <button class="btn" onclick="showModal('createRepo')" style="margin-top: 1rem;">+ New Repository</button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                grid.innerHTML = repos.map(repo => `
+                    <div class="repo-card" onclick="viewRepo('${repo.id}')">
+                        <h3>${repo.name}</h3>
+                        <p>${repo.description || 'No description'}</p>
+                        <span class="badge badge-${repo.visibility}">${repo.visibility}</span>
+                    </div>
+                `).join('');
+            } catch (e) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <h2>Cannot Connect to PatchRepo</h2>
+                        <p>Start the server: python agent/patchrepo_api.py</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function createRepo(e) {
+            e.preventDefault();
+            const form = new FormData(e.target);
+            const data = Object.fromEntries(form);
+            
+            await fetch(`${API_BASE}/repos`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            
+            hideModal('createRepo');
+            loadRepos();
+        }
+        
+        async function viewRepo(repoId) {
+            currentRepo = repoId;
+            showTab('repoDetail');
+            
+            document.getElementById('webhookRepoId').innerText = repoId;
+            
+            // Load commits
+            const commits = await fetch(`${API_BASE}/repos/${repoId}/commits`).then(r => r.json());
+            const commitList = document.getElementById('commitList');
+            
+            if (commits.length === 0) {
+                commitList.innerHTML = '<div class="empty-state">No commits yet</div>';
+            } else {
+                commitList.innerHTML = commits.slice(0, 10).map(c => `
+                    <div class="commit">
+                        <span class="commit-hash">${c.id}</span>
+                        <span class="commit-message">${c.message}</span>
+                        <span class="commit-author">${c.author}</span>
+                    </div>
+                `).join('');
+            }
+        }
+        
+        async function loadPatches() {
+            const tbody = document.getElementById('patchTable');
+            try {
+                const patches = await fetch(`${API_BASE}/patches`).then(r => r.json());
+                
+                if (patches.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No patches uploaded</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = patches.map(p => `
+                    <tr>
+                        <td>${p.name}</td>
+                        <td>${p.version}</td>
+                        <td><span class="badge">${p.platform}</span></td>
+                        <td>${p.uploaded_at || 'N/A'}</td>
+                        <td>${(p.size / 1024 / 1024).toFixed(1)} MB</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Start PatchRepo server to see patches</td></tr>';
+            }
+        }
+        
+        async function loadPRs() {
+            // Would load PRs from API
+        }
+        
+        async function createPR(e) {
+            e.preventDefault();
+            hideModal('createPR');
+        }
+        
+        async function uploadPatch(e) {
+            e.preventDefault();
+            hideModal('uploadPatch');
+            loadPatches();
+        }
+        
+        function copyWebhook() {
+            const url = `/api/repos/${currentRepo}/webhook`;
+            navigator.clipboard.writeText(window.location.origin + url);
+            alert('Webhook URL copied!');
+        }
+        
+        // Initialize
+        loadRepos();
+    </script>
+</body>
+</html>

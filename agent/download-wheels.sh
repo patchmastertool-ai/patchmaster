@@ -48,6 +48,18 @@ pip3 download \
     --no-deps \
     -r "$REQUIREMENTS" 2>/dev/null || true
 
+# For Linux aarch64 (ARM64)
+echo "[1.5/4] Downloading for Linux aarch64 (Python 3.8+)..."
+pip3 download \
+    --dest "$WHEELS_DIR" \
+    --platform manylinux2014_aarch64 \
+    --platform manylinux_2_17_aarch64 \
+    --platform linux_aarch64 \
+    --python-version 38 \
+    --only-binary=:all: \
+    --no-deps \
+    -r "$REQUIREMENTS" 2>/dev/null || true
+
 # For pure Python packages (platform independent)
 echo "[2/4] Downloading pure Python packages..."
 pip3 download \
