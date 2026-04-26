@@ -298,7 +298,7 @@ export default function CVEOpsPage({ API, apiFetch, hasRole, getToken, AppIcon }
     { label: 'Tracked CVEs', value: totalTracked, sub: `${safeCves.length} in the current view`, icon: 'database', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
     { label: 'Critical', value: criticalCount, sub: 'highest-severity findings', icon: 'bug', color: '#dc2626', bg: 'rgba(239,68,68,0.12)' },
     { label: 'High Severity', value: highCount, sub: `${mediumCount} medium and ${lowCount} low`, icon: 'shield', color: '#d97706', bg: 'rgba(245,158,11,0.14)' },
-    { label: 'Open Vulnerabilities', value: openCount, sub: 'still awaiting remediation', icon: 'list', color: '#7c3aed', bg: 'rgba(139,92,246,0.12)' },
+    { label: 'Open Vulnerabilities', value: openCount, sub: 'still awaiting remediation', icon: 'list', color: '#06b6d4', bg: 'rgba(139,92,246,0.12)' },
     { label: 'Patched', value: patchedCount, sub: `${closureRate}% closure rate`, icon: 'refresh', color: '#0f766e', bg: 'rgba(16,185,129,0.12)' },
     { label: 'Host-linked Records', value: linkedRecords, sub: onlyWithHosts ? 'host-linked filter enabled' : 'records currently tied to hosts', icon: 'server', color: '#1d4ed8', bg: 'rgba(59,130,246,0.12)' },
   ];

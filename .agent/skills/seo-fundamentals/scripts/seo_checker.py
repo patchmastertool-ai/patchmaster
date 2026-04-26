@@ -34,7 +34,8 @@ except:
 SKIP_DIRS = {
     'node_modules', '.next', 'dist', 'build', '.git', '.github',
     '__pycache__', '.vscode', '.idea', 'coverage', 'test', 'tests',
-    '__tests__', 'spec', 'docs', 'documentation', 'examples'
+    '__tests__', 'spec', 'docs', 'documentation', 'examples',
+    'frontend_backup', 'test-venv', 'venv', 'reports', '.venv', '.pm-venv', '.build-release-venv'
 }
 
 # Files to skip (not pages)
@@ -83,7 +84,7 @@ def find_pages(project_path: Path) -> list:
     for pattern in patterns:
         for f in project_path.glob(pattern):
             # Skip excluded directories
-            if any(skip in f.parts for skip in SKIP_DIRS):
+            if any(skip in f.parts for skip in SKIP_DIRS) or any(part.startswith('.pkg-build') or part.startswith('.agent') for part in f.parts):
                 continue
             
             # Check if it's likely a page

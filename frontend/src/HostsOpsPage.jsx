@@ -445,7 +445,7 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
     { label: 'Avg Compliance', value: `${avgCompliance}%`, sub: `${highRiskHosts} hosts need follow-up`, icon: 'shield', color: '#0f766e', bg: 'rgba(16,185,129,0.12)' },
     { label: 'Open Exposure', value: totalCves, sub: 'total CVEs linked across hosts', icon: 'bug', color: '#dc2626', bg: 'rgba(239,68,68,0.12)' },
     { label: 'Restart Queue', value: rebootCount, sub: 'hosts waiting for reboot completion', icon: 'refresh', color: '#d97706', bg: 'rgba(245,158,11,0.14)' },
-    { label: 'Bulk Scope', value: selected.length, sub: selected.length ? 'hosts selected for bulk changes' : 'no hosts selected', icon: 'layers', color: '#7c3aed', bg: 'rgba(139,92,246,0.12)' },
+    { label: 'Bulk Scope', value: selected.length, sub: selected.length ? 'hosts selected for bulk changes' : 'no hosts selected', icon: 'layers', color: '#06b6d4', bg: 'rgba(139,92,246,0.12)' },
     { label: 'Active Sites', value: siteOptions.length, sub: siteOptions.length ? 'first-class locations tracked in inventory' : 'no locations assigned yet', icon: 'map-pin', color: '#1d4ed8', bg: 'rgba(59,130,246,0.12)' },
   ];
 
@@ -741,7 +741,7 @@ export default function HostsOpsPage({ hosts, setHosts, API, apiFetch, hasRole, 
                     { label: 'Reachability', value: detail.is_online ? 'Online' : 'Offline', sub: detail.last_heartbeat ? new Date(detail.last_heartbeat).toLocaleString() : 'No heartbeat recorded', icon: 'monitor', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
                     { label: 'Compliance', value: `${detail.compliance_score || 0}%`, sub: `${detail.upgradable_count || 0} package updates remaining`, icon: 'shield', color: '#0f766e', bg: 'rgba(16,185,129,0.12)' },
                     { label: 'Active CVEs', value: detail.cve_count || 0, sub: detailActiveCves.length ? `${detailActiveCves.length} in the active list` : 'No active CVEs linked', icon: 'bug', color: '#dc2626', bg: 'rgba(239,68,68,0.12)' },
-                    { label: 'Patch History', value: detail.last_patched ? new Date(detail.last_patched).toLocaleDateString() : 'Not recorded', sub: detailRecentJobs.length ? `${detailRecentJobs.length} recent job records` : 'No recent jobs recorded', icon: 'timeline', color: '#7c3aed', bg: 'rgba(139,92,246,0.12)' },
+                    { label: 'Patch History', value: detail.last_patched ? new Date(detail.last_patched).toLocaleDateString() : 'Not recorded', sub: detailRecentJobs.length ? `${detailRecentJobs.length} recent job records` : 'No recent jobs recorded', icon: 'timeline', color: '#06b6d4', bg: 'rgba(139,92,246,0.12)' },
                   ].map(card => (
                     <div key={card.label} className="ops-summary-card">
                       <div className="ops-summary-head">

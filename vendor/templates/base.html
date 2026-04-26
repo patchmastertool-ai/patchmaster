@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">
 <head>
+<meta name="description" content="PatchMaster Enterprise - Automated Patch Management">
+<meta property="og:title" content="PatchMaster Enterprise">
+<meta property="og:description" content="Automated Patch Management">
+<meta property="og:type" content="website">
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}PatchMaster by YVGROUP{% endblock %} — {{ portal_name }}</title>
@@ -185,49 +190,49 @@
       <small>{{ portal_name }} v{{ portal_version }}</small>
     </div>
     <ul class="nav flex-column mt-3 flex-grow-1">
-      <li class="nav-item">
+      <li class="nav-elem">
         <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
           <i class="bi bi-grid-1x2-fill"></i> Dashboard
         </a>
       </li>
-      <li class="nav-item">
+      <li class="nav-elem">
         <a class="nav-link {% if 'customer' in request.endpoint|default('', true) %}active{% endif %}" href="{{ url_for('customers_list') }}">
           <i class="bi bi-people-fill"></i> Customers
         </a>
       </li>
-      <li class="nav-item">
+      <li class="nav-elem">
         <a class="nav-link {% if 'purchase' in request.endpoint|default('', true) %}active{% endif %}" href="{{ url_for('purchases_list') }}">
           <i class="bi bi-cart-fill"></i> Purchases
         </a>
       </li>
-      <li class="nav-item">
+      <li class="nav-elem">
         <a class="nav-link {% if 'license' in request.endpoint|default('', true) %}active{% endif %}" href="{{ url_for('licenses_list') }}">
           <i class="bi bi-key-fill"></i> Licenses
         </a>
       </li>
-      <li class="nav-item">
+      <li class="nav-elem">
         <a class="nav-link {% if 'version' in request.endpoint|default('', true) %}active{% endif %}" href="{{ url_for('versions_list') }}">
           <i class="bi bi-box-seam-fill"></i> Tool Versions
         </a>
       </li>
-      <li class="nav-item">
+      <li class="nav-elem">
         <a class="nav-link {% if request.endpoint == 'reports' %}active{% endif %}" href="{{ url_for('reports') }}">
           <i class="bi bi-bar-chart-line-fill"></i> Reports
         </a>
       </li>
-      <li class="nav-item">
+      <li class="nav-elem">
         <a class="nav-link {% if request.endpoint == 'activity_log' %}active{% endif %}" href="{{ url_for('activity_log') }}">
           <i class="bi bi-clock-history"></i> Activity Log
         </a>
       </li>
       {% if session.get('role') == 'admin' %}
-      <li class="nav-item">
+      <li class="nav-elem">
         <a class="nav-link {% if 'user' in request.endpoint|default('', true) %}active{% endif %}" href="{{ url_for('users_list') }}">
           <i class="bi bi-shield-lock-fill"></i> Portal Users
         </a>
       </li>
       {% endif %}
-      <li class="nav-item">
+      <li class="nav-elem">
         <a class="nav-link {% if request.endpoint == 'deleted_customers' %}active{% endif %}" href="{{ url_for('deleted_customers') }}">
           <i class="bi bi-trash-fill" style="color:var(--ch-error)"></i> Deleted Customers
         </a>
@@ -240,8 +245,8 @@
           {% if session.get('role') == 'admin' %}<span class="badge ms-1" style="background:rgba(56,189,248,0.2);color:var(--ch-primary);font-size:0.62rem">Admin</span>{% endif %}
         </small>
         <div class="d-flex gap-1">
-          <a href="{{ url_for('change_password') }}" class="btn btn-sm btn-outline-secondary" title="Change Password"><i class="bi bi-key"></i></a>
-          <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-secondary" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+          <a data-action="password" href="{{ url_for('change_password') }}" class="btn btn-sm btn-outline-secondary" title="Change Password"><i class="bi bi-key"></i></a>
+          <a data-action="logout" href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-secondary" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
         </div>
       </div>
     </div>
@@ -267,3 +272,5 @@
   {% block scripts %}{% endblock %}
 </body>
 </html>
+
+<!-- placeholder -->

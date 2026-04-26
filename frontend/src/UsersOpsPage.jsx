@@ -173,12 +173,12 @@ export default function UsersOpsPage({ API, apiFetch, AppIcon }) {
   return (
     <div className="ops-shell">
       <div className="ops-hero">
-        <div className="ops-hero-main" style={{ borderColor: '#c4b5fd', background: 'linear-gradient(145deg, #f5f3ff, #faf9ff)' }}>
+        <div className="ops-hero-main" style={{ borderColor: '#06b6d4', background: 'linear-gradient(145deg, #f5f3ff, #faf9ff)' }}>
           <div className="ops-kicker">Identity and access</div>
           <div className="ops-hero-row">
             <div className="ops-hero-emphasis">
               <span className="ops-emphasis-label">Active users</span>
-              <span className="ops-emphasis-value" style={{ color: '#6d28d9' }}>{activeUsers}</span>
+              <span className="ops-emphasis-value" style={{ color: '#06b6d4' }}>{activeUsers}</span>
               <span className="ops-emphasis-meta">{users.length} total accounts across admins, operators, viewers, and auditors.</span>
             </div>
             <div className="ops-hero-copy">
@@ -227,7 +227,7 @@ export default function UsersOpsPage({ API, apiFetch, AppIcon }) {
           { label: 'Enabled accounts', value: activeUsers, sub: 'users currently allowed to sign in', icon: 'users', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
           { label: 'Custom overrides', value: customOverrideUsers, sub: 'accounts with permission deltas from role defaults', icon: 'shield', color: '#d97706', bg: 'rgba(245,158,11,0.14)' },
           { label: 'Admin coverage', value: roleMix.admin, sub: 'accounts with highest privilege tier', icon: 'key', color: '#dc2626', bg: 'rgba(239,68,68,0.12)' },
-          { label: 'Feature matrix', value: safeAllFeatures.length, sub: 'permissions tracked by PatchMaster RBAC', icon: 'sliders', color: '#7c3aed', bg: 'rgba(139,92,246,0.12)' },
+          { label: 'Feature matrix', value: safeAllFeatures.length, sub: 'permissions tracked by PatchMaster RBAC', icon: 'sliders', color: '#06b6d4', bg: 'rgba(139,92,246,0.12)' },
         ].map((card) => (
           <div key={card.label} className="ops-summary-card">
             <div className="ops-summary-head">

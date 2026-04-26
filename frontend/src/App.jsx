@@ -1316,7 +1316,7 @@ function CompliancePage() {
       value: totalUpgradable,
       sub: 'remaining package updates',
       icon: 'package',
-      color: '#7c3aed',
+      color: '#06b6d4',
       bg: 'rgba(139,92,246,0.12)',
     },
     {

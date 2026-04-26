@@ -401,14 +401,14 @@ export default function PatchManagerOpsPage({ hosts, API, apiFetch, AppIcon, use
       : {
           title: 'Discovery pending',
           description: 'Run an update check to inventory the packages that are ready to download and install offline.',
-          tone: '#7c3aed',
+          tone: '#06b6d4',
           bg: 'linear-gradient(145deg, #f5f3ff, #fbf8ff)',
-          border: '#c4b5fd',
+          border: '#06b6d4',
         };
 
   const summaryCards = [
     { label: 'Target Host', value: currentHost ? (currentHost.hostname || currentHost.name) : 'None', sub: currentHost ? currentHost.ip : 'Select a host to begin', icon: 'server', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
-    { label: 'Updates Found', value: upgradable.length, sub: info || 'No discovery has run yet', icon: 'package', color: '#7c3aed', bg: 'rgba(139,92,246,0.12)' },
+    { label: 'Updates Found', value: upgradable.length, sub: info || 'No discovery has run yet', icon: 'package', color: '#06b6d4', bg: 'rgba(139,92,246,0.12)' },
     { label: 'Installed', value: installed.length, sub: 'Live package inventory on target host', icon: 'search', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
     { label: 'Patch Scope', value: patchScopeCount, sub: upgradable.length ? (selectedPkgs.length ? 'Explicit package selection' : 'All discovered packages') : 'No package scope yet', icon: 'layers', color: '#0f766e', bg: 'rgba(20,184,166,0.12)' },
     { label: 'Safeguards', value: safeguardCount, sub: `${holdList.length} packages on hold`, icon: 'shield', color: '#d97706', bg: 'rgba(245,158,11,0.14)' },

@@ -87,7 +87,7 @@ export default function ReportsOpsPage({ API, apiFetch, getToken, authHeaders, t
       buttonClass: 'btn btn-primary',
       disabled: !!downloadingType || downloading,
       icon: 'database',
-      color: '#7c3aed',
+      color: '#06b6d4',
       bg: 'rgba(139,92,246,0.12)',
       audience: 'Audit, GRC, and operations',
     },
@@ -216,3 +216,5 @@ export default function ReportsOpsPage({ API, apiFetch, getToken, authHeaders, t
     </div>
   );
 }
+
+{/* placeholder */}

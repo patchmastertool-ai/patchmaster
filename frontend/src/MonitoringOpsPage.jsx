@@ -459,3 +459,5 @@ export default function MonitoringOpsPage({ licenseInfo, hosts = [], API, apiFet
     </div>
   );
 }
+
+{/* placeholder */}

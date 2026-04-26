@@ -196,7 +196,7 @@ export default function OnboardingOpsPage({ AppIcon }) {
         {[
           { label: 'Master address', value: masterIp || '<master-ip>', sub: 'used in every install command', icon: 'server', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
           { label: 'Quick install', value: '2 paths', sub: 'Linux bootstrap and Windows installer', icon: 'terminal', color: '#0f766e', bg: 'rgba(16,185,129,0.12)' },
-          { label: 'Packaged artifacts', value: `${manualTracks.length}`, sub: 'DEB, RPM, PKG.TAR.ZST, APK, TXZ, and EXE', icon: 'archive', color: '#7c3aed', bg: 'rgba(139,92,246,0.12)' },
+          { label: 'Packaged artifacts', value: `${manualTracks.length}`, sub: 'DEB, RPM, PKG.TAR.ZST, APK, TXZ, and EXE', icon: 'archive', color: '#06b6d4', bg: 'rgba(139,92,246,0.12)' },
           { label: 'Validation', value: `${verifySnippets.length} blocks`, sub: 'systemd, OpenRC, rc.d, and Windows checks', icon: 'shield', color: '#d97706', bg: 'rgba(245,158,11,0.14)' },
         ].map(card => (
           <div key={card.label} className="ops-summary-card">

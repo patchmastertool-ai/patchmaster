@@ -155,7 +155,7 @@ export default function LocalRepoOpsPage({ API, apiFetch, AppIcon }) {
         {[
           { label: 'Stored packages', value: numberFmt.format(packages.length), sub: 'files available for host push', icon: 'archive', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
           { label: 'Repository size', value: formatSize(stats.totalStorage), sub: 'current package storage footprint', icon: 'database', color: '#0f766e', bg: 'rgba(16,185,129,0.12)' },
-          { label: 'Latest upload', value: stats.latest ? extensionFor(stats.latest.name).toUpperCase() : 'None', sub: stats.latest ? stats.latest.name : 'repository not seeded yet', icon: 'package', color: '#7c3aed', bg: 'rgba(139,92,246,0.12)' },
+          { label: 'Latest upload', value: stats.latest ? extensionFor(stats.latest.name).toUpperCase() : 'None', sub: stats.latest ? stats.latest.name : 'repository not seeded yet', icon: 'package', color: '#06b6d4', bg: 'rgba(139,92,246,0.12)' },
           { label: 'Distribution mode', value: 'Air-gapped', sub: 'push packages from the master node to agents', icon: 'cloud-off', color: '#d97706', bg: 'rgba(245,158,11,0.14)' },
         ].map((card) => (
           <div key={card.label} className="ops-summary-card">

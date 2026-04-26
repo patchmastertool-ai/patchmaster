@@ -151,7 +151,7 @@ export default function SettingsOpsPage({ health, hosts, jobs, API, apiFetch, Ap
         {[
           { label: 'Backend status', value: backendOnline ? 'Online' : 'Offline', sub: 'service reachability from the UI', icon: 'server', color: backendOnline ? '#16a34a' : '#dc2626', bg: backendOnline ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)' },
           { label: 'Master host', value: masterIp, sub: 'agent-facing control plane address', icon: 'server', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
-          { label: 'Managed hosts', value: hosts.length, sub: 'fleet size reflected in PatchMaster', icon: 'users', color: '#7c3aed', bg: 'rgba(139,92,246,0.12)' },
+          { label: 'Managed hosts', value: hosts.length, sub: 'fleet size reflected in PatchMaster', icon: 'users', color: '#06b6d4', bg: 'rgba(139,92,246,0.12)' },
           { label: 'Tracked jobs', value: jobs.length, sub: 'execution history and active queue', icon: 'timeline', color: '#d97706', bg: 'rgba(245,158,11,0.14)' },
         ].map(card => (
           <div key={card.label} className="ops-summary-card">

@@ -151,7 +151,7 @@ export default function DashboardOpsPage({
     { label: 'Managed Hosts', value: totalHosts, sub: `${onlineHosts} reporting live`, icon: 'server', color: '#2563eb', bg: 'rgba(37,99,235,0.12)', page: 'hosts' },
     { label: 'Patch Compliance', value: `${avgCompliance}%`, sub: `${rebootRequired} waiting for reboot`, icon: 'shield', color: '#0f766e', bg: 'rgba(16,185,129,0.12)', page: 'compliance' },
     { label: 'Critical CVEs', value: criticalCves, sub: `${openVulns} open vulnerabilities`, icon: 'bug', color: '#dc2626', bg: 'rgba(239,68,68,0.12)', page: 'cve' },
-    { label: 'Patch Queue', value: upgradable, sub: `${running} jobs running now`, icon: 'package', color: '#7c3aed', bg: 'rgba(139,92,246,0.12)', page: 'patches' },
+    { label: 'Patch Queue', value: upgradable, sub: `${running} jobs running now`, icon: 'package', color: '#06b6d4', bg: 'rgba(139,92,246,0.12)', page: 'patches' },
     { label: 'Execution Quality', value: `${patchSuccessRate}%`, sub: `${success30d} success / ${failed30d} failed`, icon: 'timeline', color: '#1d4ed8', bg: 'rgba(59,130,246,0.12)', page: 'jobs' },
     { label: 'Pending Work', value: pending, sub: 'scheduled or pending jobs', icon: 'calendar', color: '#d97706', bg: 'rgba(245,158,11,0.14)', page: 'jobs' },
   ];
@@ -429,3 +429,5 @@ export default function DashboardOpsPage({
     </div>
   );
 }
+
+{/* placeholder */}

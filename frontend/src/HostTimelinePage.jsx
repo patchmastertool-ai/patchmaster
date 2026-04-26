@@ -18,7 +18,7 @@ export default function HostTimelinePage({ hosts, API, apiFetch, CodeIcon }) {
   const typeMeta = {
     all: { label: 'All Events', code: 'AL', tone: '#1d4ed8', bg: 'rgba(37,99,235,0.12)' },
     patch: { label: 'Patch', code: 'PT', tone: '#15803d', bg: 'rgba(34,197,94,0.14)' },
-    snapshot: { label: 'Snapshot', code: 'SN', tone: '#7c3aed', bg: 'rgba(139,92,246,0.14)' },
+    snapshot: { label: 'Snapshot', code: 'SN', tone: '#06b6d4', bg: 'rgba(139,92,246,0.14)' },
     cve: { label: 'CVE', code: 'CV', tone: '#dc2626', bg: 'rgba(239,68,68,0.14)' },
     reboot: { label: 'Reboot', code: 'RB', tone: '#b45309', bg: 'rgba(245,158,11,0.16)' },
     agent_update: { label: 'Agent Update', code: 'AU', tone: '#0369a1', bg: 'rgba(14,165,233,0.14)' },

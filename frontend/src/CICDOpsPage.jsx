@@ -492,7 +492,7 @@ export default function CICDOpsPage({ API, apiFetch, hasPerm, hasRole, getToken,
   const successfulRuns = buildsList.filter((build) => build.status === 'success').length;
   const operationsSummary = useMemo(() => ([
     { label: 'Pipelines', value: pipelinesList.length, sub: `${activePipelines} active`, icon: 'pipeline', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
-    { label: 'Build activity', value: buildsList.length, sub: `${recentRuns} running or pending`, icon: 'timeline', color: '#7c3aed', bg: 'rgba(139,92,246,0.12)' },
+    { label: 'Build activity', value: buildsList.length, sub: `${recentRuns} running or pending`, icon: 'timeline', color: '#06b6d4', bg: 'rgba(139,92,246,0.12)' },
     { label: 'Git connections', value: gitReposList.length, sub: `${connectedRepos} healthy`, icon: 'layers', color: '#0f766e', bg: 'rgba(16,185,129,0.12)' },
     { label: 'Deploy assets', value: artifacts.length, sub: `${deployments.length} deployments tracked`, icon: 'archive', color: '#d97706', bg: 'rgba(245,158,11,0.14)' },
   ]), [pipelinesList.length, activePipelines, buildsList.length, recentRuns, gitReposList.length, connectedRepos, artifacts.length, deployments.length]);

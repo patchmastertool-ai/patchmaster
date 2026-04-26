@@ -43,7 +43,7 @@ export default function PatchHooksPage({ API, apiFetch, toast }) {
     toast('Deleted', 'success'); load();
   };
 
-  const triggerColor = t => ({ pre_patch: '#3b82f6', post_patch: '#10b981', on_failure: '#ef4444', on_success: '#22c55e', pre_snapshot: '#8b5cf6', post_snapshot: '#a78bfa' }[t] || '#64748b');
+  const triggerColor = t => ({ pre_patch: '#3b82f6', post_patch: '#10b981', on_failure: '#ef4444', on_success: '#22c55e', pre_snapshot: '#0ea5e9', post_snapshot: '#14b8a6' }[t] || '#64748b');
 
   return (
     <div>

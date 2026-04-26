@@ -99,7 +99,7 @@ export default function LicenseOpsPage({ licenseInfo, onRefresh, API, apiFetch, 
     };
   }, [li]);
 
-  const tierColors = { basic:'#3b82f6', standard:'#10b981', devops:'#f59e0b', enterprise:'#8b5cf6' };
+  const tierColors = { basic:'#3b82f6', standard:'#10b981', devops:'#f59e0b', enterprise:'#06b6d4' };
   const features = Array.isArray(li.features) ? li.features : [];
   const featurePreview = features.slice(0, 8);
 
@@ -107,7 +107,7 @@ export default function LicenseOpsPage({ licenseInfo, onRefresh, API, apiFetch, 
     { label: 'License state', value: status.label, sub: status.description, icon: 'key', color: status.color, bg: status.bg.includes('fef2f2') ? 'rgba(239,68,68,0.12)' : status.bg.includes('fffbeb') ? 'rgba(245,158,11,0.14)' : status.bg.includes('ecfdf3') ? 'rgba(34,197,94,0.12)' : 'rgba(148,163,184,0.14)' },
     { label: 'Tier', value: li.tier_label || li.tier || 'Unlicensed', sub: li.plan_label || 'No plan loaded', icon: 'shield', color: tierColors[li.tier] || '#475569', bg: 'rgba(59,130,246,0.10)' },
     { label: 'Max hosts', value: li.max_hosts === 0 ? 'Unlimited' : li.max_hosts ?? '--', sub: 'licensed fleet coverage', icon: 'users', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
-    { label: 'Feature count', value: features.length, sub: 'entitlements loaded from the current key', icon: 'sliders', color: '#7c3aed', bg: 'rgba(139,92,246,0.12)' },
+    { label: 'Feature count', value: features.length, sub: 'entitlements loaded from the current key', icon: 'sliders', color: '#06b6d4', bg: 'rgba(139,92,246,0.12)' },
   ];
 
   const detailRows = [
