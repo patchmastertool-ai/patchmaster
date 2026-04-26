@@ -45,7 +45,7 @@ graph TD
     end
     
     subgraph "Presentation Layer"
-        SPA[React + Vite SPA<br/>Command Horizon UI]:::frontend
+        SPA[React + Vite SPA<br/>Administrative Dashboard]:::frontend
     end
     
     subgraph "Application Layer (Python/FastAPI)"
@@ -93,7 +93,7 @@ sequenceDiagram
     participant Nginx as Nginx Edge
     participant API as REST Controller
     participant DB as PostgreSQL
-    participant UI as Command Horizon UI
+    participant UI as React Dashboard
 
     Note over Agent: Runs autonomously via SystemD/Cron
     Agent->>Nginx: POST /api/heartbeat (System Metrics)
@@ -134,10 +134,10 @@ Deploying patches blindly is a critical operational risk. PatchMaster's API (`ba
 
 ### 3. 📡 Real-Time Edge Telemetry
 Leveraging Python's asynchronous capabilities and Nginx HTTP/1.1 upgrade headers, the platform maintains persistent, low-latency WebSocket connections with target nodes.
-- **Live Observability:** Instantly view CPU limits, memory leaks, and registration statuses natively within the *Command Horizon* UI.
+- **Live Observability:** Instantly view CPU limits, memory leaks, and registration statuses natively within the dashboard.
 
-### 4. 🎨 Stitch UI Builder (AI-Powered)
-PatchMaster isn't just an API; it includes a sophisticated, React-based frontend development suite. The internal **Stitch UI Builder** provides an AI-integrated environment to dynamically generate syntax-validated, high-density React components on the fly, accelerating custom administrative dashboard creation.
+### 4. 🎨 Comprehensive React Dashboard
+PatchMaster provides a fully integrated, high-performance React dashboard that serves as the central command hub. It empowers administrators to intuitively monitor real-time telemetry, manage role-based access, orchestrate patching pipelines, and visualize deployment health across thousands of nodes.
 
 ---
 
@@ -232,7 +232,6 @@ PatchMaster provides low-level scripts to detect environment desynchronization, 
 For system administrators and integration engineers, detailed references are available:
 - **[Architectural Release Notes](RELEASE_NOTES_2.0.1.md)** - Low-level changes regarding WebSocket fixes and Agent Registration stability.
 - **[Dark Site Deployment Guide](OFFLINE_AGENT_INSTALLATION.md)** - Operational procedures for air-gapped data centers.
-- **[Stitch Integration Spec](STITCH_UI_DEMO_SUMMARY.md)** - Documentation on the AI-powered UI generation capabilities.
 
 <br>
 
