@@ -45,7 +45,7 @@ graph TD
     end
     
     subgraph "Presentation Layer"
-        SPA[React + Vite SPA<br/>Administrative Dashboard]:::frontend
+        SPA[React 18 + Vite 7<br/>Custom SPA — No UI Framework]:::frontend
     end
     
     subgraph "Application Layer (Python/FastAPI)"
@@ -93,7 +93,7 @@ sequenceDiagram
     participant Nginx as Nginx Edge
     participant API as REST Controller
     participant DB as PostgreSQL
-    participant UI as React Dashboard
+    participant UI as React 18 Dashboard
 
     Note over Agent: Runs autonomously via SystemD/Cron
     Agent->>Nginx: POST /api/heartbeat (System Metrics)
@@ -118,6 +118,38 @@ To support thousands of concurrent agents hitting the API every 30 seconds, the 
 - **Composite Indexing:** Heavy queries used by the frontend dashboard leverage composite indexes on `(status, last_seen)` to keep query times strictly under 5ms.
 - **Connection Pooling:** Controlled via SQLAlchemy, maintaining a strict `pool_size=100` to prevent database exhaustion under spike loads.
 
+### 4. Frontend Architecture (Verified from Codebase)
+The frontend is a **fully custom-built React 18.3.1 + Vite 7.1.5 Single Page Application** — no external UI component libraries are used. All components, layouts, icons, and styling are hand-crafted in-house.
+
+```
+frontend/src/
+├── App.jsx                   # Root app: routing, auth, sidebar, 35+ lazy-loaded pages
+├── App.css                   # Full design system: tokens, layout, components (~36KB)
+├── appRuntime.js             # API client, JWT helpers, RBAC, WebSocket URL builder
+├── AppIcons.jsx              # Custom SVG icon library (no icon font dependency)
+├── ToastSystem.jsx           # Context-based global toast notification system
+├── DashboardOpsPage.jsx      # Live health, host stats, job activity
+├── HostsOpsPage.jsx          # Host fleet management
+├── PatchManagerOpsPage.jsx   # Patch orchestration UI
+├── CVEOpsPage.jsx            # CVE tracker and severity dashboard
+├── CICDOpsPage.jsx           # Full CI/CD pipeline builder (~115KB)
+├── MonitoringOpsPage.jsx     # Prometheus metrics & live graphs
+├── NetworkBootPage.jsx       # PXE / network boot management (~60KB)
+└── ... 30+ more production pages
+```
+
+**Key frontend capabilities — verified in codebase:**
+
+| Capability | Implementation Detail |
+|---|---|
+| Auth | JWT tokens + SSO URL fragment callback + Active Directory / LDAP login modal |
+| Dark Mode | `data-theme` DOM attribute toggle, persisted in `localStorage` |
+| Global Search | `Ctrl+K` shortcut, 300ms debounced search across hosts, CVEs, jobs |
+| Navigation | RBAC + license feature-flag gated sidebar with 35+ pages |
+| Notifications | WebSocket push (`/api/notifications/ws`) + 30s polling fallback, unread badge |
+| Error Handling | Per-page `ErrorBoundary` + `React.Suspense` lazy-load fallbacks |
+| Performance | All pages loaded via `React.lazy()` — only downloads code when navigated to |
+
 ---
 
 ## 🚀 Advanced Capabilities
@@ -134,10 +166,10 @@ Deploying patches blindly is a critical operational risk. PatchMaster's API (`ba
 
 ### 3. 📡 Real-Time Edge Telemetry
 Leveraging Python's asynchronous capabilities and Nginx HTTP/1.1 upgrade headers, the platform maintains persistent, low-latency WebSocket connections with target nodes.
-- **Live Observability:** Instantly view CPU limits, memory leaks, and registration statuses natively within the dashboard.
+- **Live Observability:** Instantly view CPU limits, memory leaks, and registration statuses natively within the React dashboard.
 
-### 4. 🎨 Comprehensive React Dashboard
-PatchMaster provides a fully integrated, high-performance React dashboard that serves as the central command hub. It empowers administrators to intuitively monitor real-time telemetry, manage role-based access, orchestrate patching pipelines, and visualize deployment health across thousands of nodes.
+### 4. 🎛️ License-Gated Feature System
+PatchMaster enforces a tiered feature access model evaluated directly in the frontend. Features such as CVE tracking, CI/CD pipelines, compliance dashboards, backup & recovery, and network boot are only activated when the active license tier supports them — resolved client-side from the `/api/license/status` API response with zero additional round-trips per navigation.
 
 ---
 
