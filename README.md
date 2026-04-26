@@ -323,15 +323,18 @@ bash build-rpm.sh                # RHEL/CentOS (.rpm)
 | `@playwright/test` | 1.49.0 | End-to-end testing |
 | `markdown-it` | 14.1.1 | Markdown rendering |
 
-### Infrastructure
+### Infrastructure (Verified from Dockerfiles & docker-compose)
 
-| Component | Version | Notes |
-|---|---|---|
-| PostgreSQL | 12+ | Primary database |
-| Nginx | Latest stable | Reverse proxy + WebSocket |
-| Prometheus | Latest | Metrics collection |
-| Grafana | Latest | Metrics visualization |
-| Python | 3.8+ (server) / 3.12+ (build) | Runtime |
+| Component | Dev Version | Production Version | Source File |
+|---|---|---|---|
+| **PostgreSQL** | `postgres:15-alpine` | `postgres:17-alpine` | `docker-compose.yml` / `docker-compose.prod.yml` |
+| **Prometheus** | `prom/prometheus:latest` | `prom/prometheus:v2.55.1` | `docker-compose.prod.yml` |
+| **Grafana** | `grafana/grafana:latest` | `grafana/grafana:11.3.1` | `docker-compose.prod.yml` |
+| **Nginx** | `nginx:alpine` | `nginx:alpine` | `docker-compose.ha.yml` |
+| **Python (Backend)** | `python:3.10-slim` | `python:3.10-slim` | `backend/Dockerfile` + `Dockerfile.prod` |
+| **Python (Vendor Portal)** | `python:3.12-slim` | `python:3.12-slim` | `vendor/Dockerfile` |
+| **Node.js (Build Stage)** | — | `node:20-bookworm-slim` | `backend/Dockerfile.prod` |
+| **Python (Bare-metal min)** | `3.8+` required | `3.8+` required | `packaging/install-bare.sh` |
 
 ---
 
