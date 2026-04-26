@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 ###############################################################################
 #  PatchMaster Uninstaller
 #  Removes PatchMaster stack and optionally all data.
@@ -24,7 +24,7 @@ banner() {
  |_|   \__,_|\__\___|_| |_| |_|  |_|_| |_|
 ART
     echo -e "${NC}"
-    echo "       PatchMaster by YVGROUP  v${PM_VERSION}"
+    echo "       PatchMaster by VYGROUP  v${PM_VERSION}"
     echo "              Uninstaller"
     echo
 }

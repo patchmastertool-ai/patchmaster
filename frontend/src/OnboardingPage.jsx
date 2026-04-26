@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Copy, Download, CheckCircle, Terminal, Book, ExternalLink } from 'lucide-react';
 
 const OnboardingPage = () => {
@@ -369,7 +369,7 @@ const OnboardingPage = () => {
               Documentation
             </a>
             <a
-              href="https://github.com/yvgroup/patchmaster"
+              href="https://github.com/VYGROUP/patchmaster"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center text-blue-600 hover:text-blue-700"

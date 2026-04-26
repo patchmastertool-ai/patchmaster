@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 from pathlib import Path
 import re
@@ -232,7 +232,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="PatchMaster by YVGROUP", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="PatchMaster by VYGROUP", version="2.0.0", lifespan=lifespan)
 
 # ── License enforcement middleware ──
 from starlette.middleware.base import BaseHTTPMiddleware

@@ -1,6 +1,6 @@
-#!/bin/bash
+﻿#!/bin/bash
 ###############################################################################
-#  PatchMaster by YVGROUP — Vendor Portal Bare-Metal Installer
+#  PatchMaster by VYGROUP — Vendor Portal Bare-Metal Installer
 #  Target OS: Ubuntu/Debian or RHEL/AlmaLinux/Rocky
 ###############################################################################
 
@@ -46,7 +46,7 @@ banner() {
  |_|   \__,_|\__\___|_| |_|  |_|\__,_|___/\__\___|_|
 ART
     echo -e "${NC}"
-    echo "       PatchMaster by YVGROUP"
+    echo "       PatchMaster by VYGROUP"
     echo "         Vendor Portal Installer"
     echo
 }
@@ -94,7 +94,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 banner
-log "Starting PatchMaster by YVGROUP Vendor Portal installation..."
+log "Starting PatchMaster by VYGROUP Vendor Portal installation..."
 
 # 1. Detect OS
 # Check Python version
@@ -455,7 +455,7 @@ chown "$SVC_USER:$SVC_GROUP" "$INSTALL_DIR/logs"
 
 cat > /etc/systemd/system/pm-vendor.service <<EOF
 [Unit]
-Description=PatchMaster by YVGROUP Vendor Portal
+Description=PatchMaster by VYGROUP Vendor Portal
 After=network.target
 
 [Service]

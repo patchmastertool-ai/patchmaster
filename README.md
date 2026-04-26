@@ -1,7 +1,7 @@
-<div align="center">
+﻿<div align="center">
 
 # 🛡️ PatchMaster Enterprise
-### *by YVGROUP*
+### *by VYGROUP*
 
 **Next-Generation, High-Availability Patch Management & Infrastructure Telemetry Platform**
 
@@ -312,7 +312,7 @@ This software and all associated source code, documentation, configurations, and
 
 Unauthorized copying, redistribution, modification, reverse engineering, or commercial use of any part of this codebase — in whole or in part — is **strictly prohibited** without prior written consent from the owner.
 
-All rights reserved. © 2026 PatchMaster by YVGROUP.
+All rights reserved. © 2026 PatchMaster by VYGROUP.
 
 ---
 

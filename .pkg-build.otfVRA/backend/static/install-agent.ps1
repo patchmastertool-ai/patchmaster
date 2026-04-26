@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     PatchMaster Agent Installer (Windows) - EXE-based
     No Python, no scheduled tasks. Uses the bundled installer EXE.
@@ -37,7 +37,7 @@ if (-not $DownloadUrl -or $DownloadUrl.Trim().Length -eq 0) {
 }
 
 Write-Host "╔════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║         PatchMaster by YVGROUP Agent Installer         ║" -ForegroundColor Cyan
+Write-Host "║         PatchMaster by VYGROUP Agent Installer         ║" -ForegroundColor Cyan
 Write-Host "╚════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 
 Write-Host "[INFO] Downloading installer from $DownloadUrl..." -ForegroundColor Blue

@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 ###############################################################################
 # PatchMaster Agent - FreeBSD Package Builder
 # Creates .txz package for FreeBSD
@@ -140,8 +140,8 @@ name: $PKG_NAME
 version: $VERSION
 origin: sysutils/patchmaster-agent
 comment: PatchMaster Agent - Universal patch management agent
-www: https://github.com/yvgroup/patchmaster
-maintainer: support@yvgroup.com
+www: https://github.com/VYGROUP/patchmaster
+maintainer: support@VYGROUP.com
 prefix: /usr/local
 desc: <<EOD
 PatchMaster Agent provides universal patch management capabilities for FreeBSD systems.

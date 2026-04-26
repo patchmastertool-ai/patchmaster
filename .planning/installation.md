@@ -1,4 +1,4 @@
-patch@patchmaster:~$ ls
+﻿patch@patchmaster:~$ ls
 patchmaster-2.0.17.tar.gz
 patch@patchmaster:~$ tar -xvf patchmaster-2.0.17.tar.gz
 .env.production
@@ -414,7 +414,7 @@ patch@patchmaster:~/packaging$ sudo ./install-bare.sh
  |  __/ (_| | || (__| '_| |  | | (_| \__ \ ||  __/ |
  |_|   \__,_|\__\___|_| |_|  |_|\__,_|___/\__\___|_|
 
-    PatchMaster by YVGROUP  v2.0.0
+    PatchMaster by VYGROUP  v2.0.0
         Bare-Metal Installer
 
 [+] Step 1/8: Detecting operating system...

@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 ###############################################################################
-#  PatchMaster by YVGROUP - Bare-Metal Installer
+#  PatchMaster by VYGROUP - Bare-Metal Installer
 #  Installs PatchMaster directly on a Linux server (no Docker required).
 #
 #  Supports: Ubuntu 20.04+, Debian 11+, RHEL 8+/CentOS Stream 8+
@@ -86,7 +86,7 @@ banner() {
  |_|   \__,_|\__\___|_| |_|  |_|\__,_|___/\__\___|_|
 ART
     echo -e "${NC}"
-    echo "    PatchMaster by YVGROUP  v${PM_VERSION}"
+    echo "    PatchMaster by VYGROUP  v${PM_VERSION}"
     echo "        Bare-Metal Installer"
     echo
 }

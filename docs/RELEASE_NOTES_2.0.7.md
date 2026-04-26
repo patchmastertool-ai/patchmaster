@@ -1,4 +1,4 @@
-# PatchMaster Release Notes - Version 2.0.7
+﻿# PatchMaster Release Notes - Version 2.0.7
 
 **Release Date:** April 12, 2026  
 **Package Size:** 123 MB  
@@ -110,7 +110,7 @@ None reported in this release.
 ## Support
 
 For issues or questions:
-- Email: support@yvgroup.com
+- Email: support@VYGROUP.com
 - Documentation: See `docs/` directory in package
 
 ## Version History

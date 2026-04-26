@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 # PatchMaster Agent Installer (Offline / Air-Gapped)
 # Usage: curl -sS http://<master-ip>:3000/download/install.sh | sudo bash -s -- <master-ip>
 #
@@ -28,7 +28,7 @@ cat <<'ART'
  |_|   \__,_|\__\___|_| |_| |_|  |_|_| |_|
 ART
 echo -e "${NC}"
-echo "       PatchMaster by YVGROUP"
+echo "       PatchMaster by VYGROUP"
 echo "     Agent Installer (Offline/Air-Gapped)"
 echo "  Master: ${MASTER_IP}"
 echo

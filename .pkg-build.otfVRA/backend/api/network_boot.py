@@ -1,4 +1,4 @@
-import io
+﻿import io
 import hashlib
 import json
 import tarfile
@@ -606,7 +606,7 @@ autopart
       <UserData>
         <AcceptEula>true</AcceptEula>
         <FullName>PatchMaster</FullName>
-        <Organization>YVGROUP</Organization>
+        <Organization>VYGROUP</Organization>
       </UserData>
     </component>
   </settings>

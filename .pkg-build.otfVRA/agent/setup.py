@@ -1,4 +1,4 @@
-import setuptools
+﻿import setuptools
 
 with open("requirements.txt") as f:
     requirements = f.read().splitlines()
@@ -6,8 +6,8 @@ with open("requirements.txt") as f:
 setuptools.setup(
     name="patchmaster-agent",
     version="2.0.0",
-    author="YVGROUP",
-    author_email="support@yvgroup.com",
+    author="VYGROUP",
+    author_email="support@VYGROUP.com",
     description="PatchMaster Enterprise Agent",
     packages=setuptools.find_packages(),
     py_modules=["agent"],

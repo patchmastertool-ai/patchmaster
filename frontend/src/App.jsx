@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+﻿import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { API, useInterval, getToken, setToken, clearToken, getLicenseCache, setLicenseCache, getUser, setUser, authHeaders, apiFetch, hasRole, hasPerm, hasFeature, sanitizeDisplayText, websocketUrl } from './appRuntime';
 import { ToastContext, useToast, useToastCtx, ToastContainer } from './ToastSystem';
 import { BellIcon, AppIcon, CodeIcon } from './AppIcons';
@@ -525,7 +525,7 @@ function App() {
             </span>
             PatchMaster
           </h2>
-          <span className="sidebar-subtitle">by YVGROUP - Enterprise Patch Management</span>
+          <span className="sidebar-subtitle">by VYGROUP - Enterprise Patch Management</span>
         </div>
         <nav className="sidebar-nav" aria-label="Main navigation">
           {navItems.map(n => (

@@ -1,6 +1,6 @@
-#!/bin/bash
+﻿#!/bin/bash
 ###############################################################################
-# PatchMaster by YVGROUP — Vendor Portal Uninstaller (Ubuntu/Debian/RHEL)
+# PatchMaster by VYGROUP — Vendor Portal Uninstaller (Ubuntu/Debian/RHEL)
 ###############################################################################
 set -euo pipefail
 
@@ -25,7 +25,7 @@ banner() {
  |_|   \__,_|\__\___|_| |_| |_|  |_|_| |_|
 ART
     echo -e "${NC}"
-    echo "       PatchMaster by YVGROUP"
+    echo "       PatchMaster by VYGROUP"
     echo "       Vendor Portal Uninstaller"
     echo
 }

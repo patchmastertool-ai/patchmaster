@@ -1,6 +1,6 @@
-#!/bin/bash
+﻿#!/bin/bash
 ###############################################################################
-#  PatchMaster by YVGROUP — Universal Agent Installer (Air-Gapped Friendly)
+#  PatchMaster by VYGROUP — Universal Agent Installer (Air-Gapped Friendly)
 #  This script is served by the Master node and installs the agent locally.
 ###############################################################################
 
@@ -33,7 +33,7 @@ banner() {
  |_|   \__,_|\__\___|_| |_| |_|  |_|_| |_|
 ART
     echo -e "${NC}"
-    echo "       PatchMaster by YVGROUP"
+    echo "       PatchMaster by VYGROUP"
     echo "           Agent Installer"
     echo
 }

@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-"""PatchMaster by YVGROUP Agent - Full patch management with snapshot/rollback, offline install, package comparison."""
+﻿#!/usr/bin/env python3
+"""PatchMaster by VYGROUP Agent - Full patch management with snapshot/rollback, offline install, package comparison."""
 
 import argparse
 import logging

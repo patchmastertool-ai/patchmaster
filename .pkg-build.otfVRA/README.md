@@ -1,4 +1,4 @@
-# PatchMaster by YVGROUP
+﻿# PatchMaster by VYGROUP
 
 **PatchMaster** is an enterprise-grade patch management platform designed for mixed Linux and Windows environments. It provides a centralized dashboard for managing security updates, software deployment, compliance, and automated workflows across hybrid and air-gapped infrastructures.
 
@@ -125,6 +125,6 @@ We have prepared detailed Standard Operating Procedures (SOPs) for all roles:
 
 ## 📄 License
 
-Managed by **YVGROUP**. Contact your vendor for license keys and support.
+Managed by **VYGROUP**. Contact your vendor for license keys and support.
 
-© 2026 YVGROUP. All rights reserved.
+© 2026 VYGROUP. All rights reserved.

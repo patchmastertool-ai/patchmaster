@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 ###############################################################################
 # PatchMaster Agent - Arch Linux Package Builder
 # Creates .pkg.tar.zst package for Arch Linux
@@ -133,7 +133,7 @@ cat > "$BUILD_DIR/.PKGINFO" <<EOF
 pkgname = $PKG_NAME
 pkgver = $VERSION-1
 pkgdesc = PatchMaster Agent - Universal patch management agent
-url = https://github.com/yvgroup/patchmaster
+url = https://github.com/VYGROUP/patchmaster
 builddate = $(date +%s)
 packager = PatchMaster Build System
 size = $(du -sb "$BUILD_DIR" | cut -f1)

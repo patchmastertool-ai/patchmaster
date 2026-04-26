@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 from datetime import date
 from xml.sax.saxutils import escape
 
@@ -182,7 +182,7 @@ def make_table(rows, col_widths=None):
 def add_cover(story, title, audience, purpose, capability_blurb=None):
     story.extend([
         Spacer(1, 28),
-        Paragraph("PatchMaster by YVGROUP", styles["GuideTitle"]),
+        Paragraph("PatchMaster by VYGROUP", styles["GuideTitle"]),
         Paragraph(escape(title), styles["GuideTitle"]),
         Paragraph(escape(f"Audience: {audience}"), styles["GuideSubtitle"]),
         Paragraph(escape(f"Prepared on {TODAY} | Product version {VERSION}"), styles["GuideSubtitle"]),
@@ -208,7 +208,7 @@ def draw_header_footer(canvas, doc):
     canvas.drawString(18 * mm, height - 12 * mm, doc.title)
     canvas.setFillColor(colors.HexColor("#475569"))
     canvas.setFont("Helvetica", 8.5)
-    canvas.drawString(18 * mm, 10 * mm, f"PatchMaster by YVGROUP | {TODAY}")
+    canvas.drawString(18 * mm, 10 * mm, f"PatchMaster by VYGROUP | {TODAY}")
     canvas.drawRightString(width - 18 * mm, 10 * mm, f"Page {doc.page}")
     canvas.restoreState()
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 ###############################################################################
 # PatchMaster Agent - Alpine Linux Package Builder
 # Creates .apk package for Alpine Linux
@@ -142,7 +142,7 @@ cat > "$BUILD_DIR/.PKGINFO" <<EOF
 pkgname = $PKG_NAME
 pkgver = $VERSION-r0
 pkgdesc = PatchMaster Agent - Universal patch management agent
-url = https://github.com/yvgroup/patchmaster
+url = https://github.com/VYGROUP/patchmaster
 builddate = $(date +%s)
 packager = PatchMaster Build System
 size = $(du -sb "$BUILD_DIR" | cut -f1)

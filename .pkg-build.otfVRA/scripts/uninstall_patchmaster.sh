@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # PatchMaster Advanced Uninstaller
 # Safely stops and removes backend/frontend/monitoring bits.
 # Usage:
@@ -24,7 +24,7 @@ banner() {
  |_|   \__,_|\__\___|_| |_| |_|  |_|_| |_|
 ART
     echo -e "${NC}"
-    echo "       PatchMaster by YVGROUP  v${PM_VERSION}"
+    echo "       PatchMaster by VYGROUP  v${PM_VERSION}"
     echo "           Advanced Uninstaller"
     echo
 }

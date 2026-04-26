@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 ###############################################################################
 #  PatchMaster — Bare-Metal Uninstaller
 #  Removes PatchMaster services and optionally all data.
@@ -25,7 +25,7 @@ banner() {
  |_|   \__,_|\__\___|_| |_| |_|  |_|_| |_|
 ART
     echo -e "${NC}"
-    echo "       PatchMaster by YVGROUP  v${PM_VERSION}"
+    echo "       PatchMaster by VYGROUP  v${PM_VERSION}"
     echo "           Bare-Metal Uninstaller"
     echo
 }

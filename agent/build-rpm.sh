@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 ###############################################################################
 # PatchMaster Agent - RPM Package Builder
 # Creates .rpm package for openSUSE/AlmaLinux/RHEL
@@ -192,7 +192,7 @@ Version:        ${VERSION}
 Release:        1
 Summary:        PatchMaster Agent - Universal patch management agent
 License:        MIT
-URL:            https://github.com/yvgroup/patchmaster
+URL:            https://github.com/VYGROUP/patchmaster
 BuildArch:      x86_64
 Requires:       python3 >= 3.8
 

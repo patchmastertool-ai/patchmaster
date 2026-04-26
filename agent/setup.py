@@ -1,4 +1,4 @@
-"""PatchMaster Agent setup.py - Windows-compatible installer."""
+﻿"""PatchMaster Agent setup.py - Windows-compatible installer."""
 
 import os
 import sys
@@ -18,8 +18,8 @@ _is_windows = sys.platform.startswith("win")
 setuptools.setup(
     name="patchmaster-agent",
     version="2.0.0",
-    author="YVGROUP",
-    author_email="support@yvgroup.com",
+    author="VYGROUP",
+    author_email="support@VYGROUP.com",
     description="PatchMaster Enterprise Agent",
     packages=setuptools.find_packages(),
     py_modules=["agent"],
