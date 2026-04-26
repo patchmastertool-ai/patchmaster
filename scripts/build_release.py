@@ -6,7 +6,7 @@ import os
 import secrets
 from pathlib import Path
 
-VERSION = "2.0.14"
+VERSION = "2.0.17"
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DIST_DIR = PROJECT_ROOT / "dist"

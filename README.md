@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 # 🛡️ PatchMaster Enterprise
 ### *by VYGROUP*
@@ -246,7 +246,7 @@ Deploys 3 load-balanced FastAPI replicas, PostgreSQL, Nginx, and Prometheus in i
 <br/>
 
 ```bash
-tar -xzf patchmaster-2.0.1.tar.gz && cd patchmaster-2.0.1
+tar -xzf patchmaster-2.0.17.tar.gz && cd patchmaster-2.0.17
 sudo bash auto-setup.sh
 ```
 
@@ -254,12 +254,12 @@ Bootstraps Nginx, PostgreSQL, and the FastAPI backend as SystemD services.
 </details>
 
 <details>
-<summary><b>🤖 Option C: Agent Compilation</b></summary>
+<summary><b>🤖 Option C: Agent Compilation (Agent v2.0.1)</b></summary>
 <br/>
 
 ```bash
 cd agent
-bash build-all-fixed.sh 2.0.1   # All platforms
+bash build-all-fixed.sh 2.0.1   # All platforms (agent stays v2.0.1)
 bash build-deb-fixed.sh          # Ubuntu/Debian (.deb)
 bash build-rpm.sh                # RHEL/CentOS (.rpm)
 ```
@@ -289,11 +289,57 @@ bash build-rpm.sh                # RHEL/CentOS (.rpm)
 
 ---
 
+## 📦 Verified Dependency Versions
+
+### Backend (`backend/requirements.txt`)
+
+| Package | Version | Purpose |
+|---|---|---|
+| `fastapi` | 0.135.1 | Async REST API framework |
+| `uvicorn` | 0.41.0 | ASGI server |
+| `pydantic` | 2.12.5 | Data validation & serialization |
+| `sqlalchemy[asyncio]` | 2.0.48 | ORM with async engine |
+| `asyncpg` | 0.30.0 | PostgreSQL async driver |
+| `PyJWT` | 2.10.1 | JWT token auth |
+| `passlib[bcrypt]` | 1.7.4 | Password hashing |
+| `bcrypt` | 5.0.0 | Bcrypt hashing library |
+| `prometheus-client` | 0.24.1 | Metrics exposition |
+| `authlib` | 1.3.2 | OIDC/OAuth2 SSO |
+| `slowapi` | 0.1.9 | Rate limiting |
+| `strawberry-graphql` | ≥0.217.0 | GraphQL API |
+| `dulwich` | ≥0.25.0 | Pure-Python Git (PatchRepo) |
+| `cryptography` | ≥42.0.0 | Cryptographic operations |
+| `pandas` | 2.3.2 | Report generation |
+| `psutil` | 7.2.2 | System metrics |
+
+### Frontend (`frontend/package.json`)
+
+| Package | Version | Purpose |
+|---|---|---|
+| `react` | 18.3.1 | UI framework |
+| `react-dom` | 18.3.1 | DOM renderer |
+| `vite` | 7.1.5 | Build tool & dev server |
+| `@vitejs/plugin-react` | 5.0.2 | React + Vite integration |
+| `@playwright/test` | 1.49.0 | End-to-end testing |
+| `markdown-it` | 14.1.1 | Markdown rendering |
+
+### Infrastructure
+
+| Component | Version | Notes |
+|---|---|---|
+| PostgreSQL | 12+ | Primary database |
+| Nginx | Latest stable | Reverse proxy + WebSocket |
+| Prometheus | Latest | Metrics collection |
+| Grafana | Latest | Metrics visualization |
+| Python | 3.8+ (server) / 3.12+ (build) | Runtime |
+
+---
+
 ## 📚 Documentation
 
 | Document | Description |
 |---|---|
-| [Release Notes v2.0.1](RELEASE_NOTES_2.0.1.md) | WebSocket fixes, agent registration improvements, security hardening |
+| [Release Notes v2.0.17](RELEASE_NOTES_2.0.1.md) | WebSocket fixes, agent registration improvements, security hardening |
 | [Offline Agent Installation](OFFLINE_AGENT_INSTALLATION.md) | Deploying to air-gapped / dark-site environments |
 | [Deployment Fixes & Runbooks](DEPLOYMENT_FIXES.md) | Operational troubleshooting and remediation steps |
 | [Installation Notes](INSTALLATION_NOTES.md) | Full server setup guide |

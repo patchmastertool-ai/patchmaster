@@ -9,7 +9,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="$ROOT_DIR/dist"
-VERSION="${VERSION:-2.0.1}"
+VERSION="${VERSION:-2.0.17}"
 SKIP_FRONTEND_BUILD=0
 PKG_TEMP_DIR=""
 

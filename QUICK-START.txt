@@ -1,23 +1,23 @@
-PatchMaster 2.0.1 - Quick Start Guide
+PatchMaster 2.0.17 - Quick Start Guide
 ======================================
 
 WHAT YOU HAVE:
 --------------
-✅ dist/patchmaster-2.0.1.tar.gz - Complete PatchMaster package (75MB)
-✅ backend/static/agent-latest.deb - Agent package with all dependencies (3.1MB)
+✅ dist/patchmaster-2.0.17.tar.gz - Complete PatchMaster package (75MB)
+✅ backend/static/agent-latest.deb - Agent package v2.0.1 with all dependencies (3.1MB)
 ✅ All fixes applied: WebSocket, frontend-backend, apt retry, agent deps
 
 STEP 1: DEPLOY TO SERVER (172.24.1.254)
 ----------------------------------------
 # Copy package to server
-scp dist/patchmaster-2.0.1.tar.gz root@172.24.1.254:/tmp/
+scp dist/patchmaster-2.0.17.tar.gz root@172.24.1.254:/tmp/
 
 # SSH to server
 ssh root@172.24.1.254
 
 # Extract and install
 cd /tmp
-tar -xzf patchmaster-2.0.1.tar.gz
+tar -xzf patchmaster-2.0.17.tar.gz
 bash packaging/install-bare.sh
 
 # Installation will:
@@ -71,7 +71,6 @@ TROUBLESHOOTING:
 ----------------
 
 If agent shows "ModuleNotFoundError":
-  # This should NOT happen with 2.0.1, but if it does:
   sudo /opt/patch-agent/venv/bin/pip install Flask requests PyYAML psutil prometheus_client
   sudo systemctl restart patch-agent patch-agent-heartbeat
 
@@ -86,19 +85,19 @@ If apt update fails during installation:
   # This is expected behavior and installation will succeed
 
 If Groups & Tags page shows WebSocket errors:
-  # This should NOT happen with 2.0.1
   # Check nginx config has WebSocket headers:
   sudo grep -A5 "location /api/" /etc/nginx/sites-available/patchmaster
 
-WHAT'S DIFFERENT FROM 2.0.0:
------------------------------
-✅ Agent package now includes ALL Python dependencies in virtualenv
-✅ No more "ModuleNotFoundError: No module named 'yaml'" or 'requests'
+WHAT'S NEW IN 2.0.17:
+---------------------
+✅ Agent package (v2.0.1) includes ALL Python dependencies in virtualenv
 ✅ Frontend properly connects to backend through nginx (not direct to :8000)
 ✅ WebSocket proxy configured for real-time features
 ✅ Robust apt update with retry logic (handles mirror sync issues)
 ✅ Installation never fails - continues even if browsers can't be installed
 ✅ Better verification and error messages during installation
+✅ VYGROUP branding applied across all components
+✅ Multi-tenant isolation and full security header hardening
 
 SUPPORT:
 --------

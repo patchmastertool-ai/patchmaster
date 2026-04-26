@@ -232,7 +232,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="PatchMaster by VYGROUP", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="PatchMaster by VYGROUP", version="2.0.17", lifespan=lifespan)
 
 # ── License enforcement middleware ──
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -545,7 +545,7 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "healthy", "version": "2.0.0"}
+    return {"status": "healthy", "version": "2.0.17"}
 
 
 @app.get("/api/system/update-status")
