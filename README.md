@@ -22,9 +22,11 @@ Engineered to operate seamlessly on standard cloud topologies as well as **fully
 
 ---
 
-## 🏛️ System Architecture
+## 🏛️ Advanced System Architecture
 
-PatchMaster follows a decoupled, resilient microservices architecture. It utilizes asynchronous event loops for high-throughput concurrency and WebSockets for real-time edge telemetry.
+PatchMaster follows a deeply decoupled, resilient microservices architecture. It utilizes asynchronous event loops for high-throughput concurrency and WebSockets for real-time edge telemetry.
+
+### 1. High-Level Topology
 
 ```mermaid
 graph TD
@@ -33,26 +35,31 @@ graph TD
     classDef backend fill:#05183c,stroke:#10b981,stroke-width:2px,color:#dee5ff;
     classDef db fill:#1e1e1e,stroke:#f59e0b,stroke-width:2px,color:#dee5ff;
     classDef agent fill:#2d3748,stroke:#a78bfa,stroke-width:2px,color:#dee5ff;
+    classDef network fill:none,stroke:#fff,stroke-dasharray: 5 5;
     
     %% Nodes
     User([System Administrator])
-    Nginx[Nginx Reverse Proxy / Load Balancer]
+    
+    subgraph "DMZ / Edge"
+        Nginx[Nginx Reverse Proxy / Load Balancer]:::network
+    end
     
     subgraph "Presentation Layer"
         SPA[React + Vite SPA<br/>Command Horizon UI]:::frontend
     end
     
-    subgraph "Application Layer"
-        API[FastAPI / Flask REST Core]:::backend
+    subgraph "Application Layer (Python/FastAPI)"
+        API[REST Core Controller]:::backend
         WS[WebSocket Telemetry Hub]:::backend
+        Tasks[Background Job Queue]:::backend
     end
     
-    subgraph "Data Layer"
+    subgraph "Data & Persistence Layer"
         Postgres[(PostgreSQL 12+<br/>Row-Level Lock Enabled)]:::db
         Prometheus[Prometheus Metrics]:::db
     end
     
-    subgraph "Edge / Target Nodes"
+    subgraph "Target Nodes / Edge Computing"
         Linux[Linux Agent]:::agent
         Unix[AIX/Solaris/HP-UX]:::agent
         Win[Windows Agent]:::agent
@@ -68,12 +75,48 @@ graph TD
     SPA -- WSS Connect --> WS
     
     API -- Read/Write --> Postgres
+    API -- Dispatch --> Tasks
     API -- Query --> Prometheus
+    Tasks -- Write State --> Postgres
     
     Linux -- Heartbeat / API --> Nginx
     Unix -- Heartbeat / API --> Nginx
     Win -- Heartbeat / API --> Nginx
 ```
+
+### 2. Telemetry & Heartbeat Data Flow
+Agents operate on a strict, stateless polling mechanism to bypass inbound firewall restrictions. The controller never initiates connections to the agents.
+
+```mermaid
+sequenceDiagram
+    participant Agent as Target Agent
+    participant Nginx as Nginx Edge
+    participant API as REST Controller
+    participant DB as PostgreSQL
+    participant UI as Command Horizon UI
+
+    Note over Agent: Runs autonomously via SystemD/Cron
+    Agent->>Nginx: POST /api/heartbeat (System Metrics)
+    Nginx->>API: Proxy Pass
+    API->>DB: UPSERT Node State & Telemetry
+    DB-->>API: Confirm Transaction
+    API-->>Nginx: 200 OK (w/ Pending Tasks)
+    Nginx-->>Agent: JSON Response
+    
+    Note over API, UI: Real-Time UI Synchronization
+    API->>UI: WSS Broadcast: { event: 'NODE_UPDATED' }
+    
+    alt If Tasks Pending
+        Agent->>Agent: Execute Local Patch Script
+        Agent->>Nginx: POST /api/tasks/status (Success/Fail)
+    end
+```
+
+### 3. Database Architecture & State Management
+To support thousands of concurrent agents hitting the API every 30 seconds, the data layer employs advanced tuning:
+- **Row-Level Locking:** Deadlocks are prevented by aggressively utilizing `SELECT ... FOR UPDATE SKIP LOCKED` during task dispatch.
+- **Composite Indexing:** Heavy queries used by the frontend dashboard leverage composite indexes on `(status, last_seen)` to keep query times strictly under 5ms.
+- **Connection Pooling:** Controlled via SQLAlchemy, maintaining a strict `pool_size=100` to prevent database exhaustion under spike loads.
 
 ---
 
