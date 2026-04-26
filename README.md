@@ -1,273 +1,325 @@
 <div align="center">
 
 # 🛡️ PatchMaster Enterprise
-**Next-Generation, High-Availability Patch Management & Telemetry Platform**
+### *by YVGROUP*
 
-[![Version](https://img.shields.io/badge/version-2.0.17-blue.svg?style=for-the-badge)](https://github.com/patchmastertool-ai/patchmaster)
-[![Status](https://img.shields.io/badge/status-Production_Ready-success.svg?style=for-the-badge)]()
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20UNIX%20%7C%20Windows-lightgrey?style=for-the-badge)]()
-[![License](https://img.shields.io/badge/license-Proprietary-red.svg?style=for-the-badge)]()
-
-*A zero-trust, air-gap resilient infrastructure command center enabling centralized control, real-time WebSocket telemetry, and secure deployment orchestration across heterogeneous server fleets.*
-
-</div>
+**Next-Generation, High-Availability Patch Management & Infrastructure Telemetry Platform**
 
 <br/>
 
+[![Version](https://img.shields.io/badge/version-2.0.17-blue.svg?style=for-the-badge)](https://github.com/patchmastertool-ai/patchmaster)
+[![Status](https://img.shields.io/badge/status-Production_Ready-success.svg?style=for-the-badge)]()
+[![Backend](https://img.shields.io/badge/backend-FastAPI%200.135%20%7C%20Python-009688?style=for-the-badge&logo=fastapi)]()
+[![Frontend](https://img.shields.io/badge/frontend-React%2018%20%7C%20Vite%207-61DAFB?style=for-the-badge&logo=react)]()
+[![Database](https://img.shields.io/badge/database-PostgreSQL%2012+-336791?style=for-the-badge&logo=postgresql)]()
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20UNIX%20%7C%20Windows-lightgrey?style=for-the-badge)]()
+[![License](https://img.shields.io/badge/license-Proprietary-red.svg?style=for-the-badge)]()
+
+<br/>
+
+*A zero-trust, air-gap resilient infrastructure command center — enabling centralized control, real-time WebSocket telemetry, and secure patch deployment orchestration across heterogeneous enterprise server fleets.*
+
+</div>
+
+---
+
 ## 📖 Executive Overview
 
-Managing highly distributed, heterogeneous, and secure environments demands more than standard package managers. PatchMaster Enterprise is an **infrastructure command center** built to unify deployment strategies, mitigate fragmentation, and enforce rigorous compliance policies globally.
+Managing highly distributed, heterogeneous, and secure environments demands more than standard package managers. **PatchMaster Enterprise** is a purpose-built infrastructure command center that unifies deployment strategies, mitigates system fragmentation, and enforces rigorous compliance policies globally — all from a single, license-gated administrative dashboard.
 
-Engineered to operate seamlessly on standard cloud topologies as well as **fully air-gapped, dark-site deployments**, the platform utilizes a proprietary offline dependency mapping strategy. This allows PatchMaster to securely deliver mission-critical patches to completely isolated systems without exposing them to external threat vectors.
+Engineered from the ground up to operate on both standard cloud topologies and **fully air-gapped, dark-site deployments**, the platform employs a proprietary offline dependency bundling strategy. This allows PatchMaster to securely deliver mission-critical patches to completely isolated systems with zero exposure to external threat vectors.
 
 ---
 
 ## 🏛️ Advanced System Architecture
 
-PatchMaster follows a deeply decoupled, resilient microservices architecture. It utilizes asynchronous event loops for high-throughput concurrency and WebSockets for real-time edge telemetry.
-
 ### 1. High-Level Topology
+
+PatchMaster uses a deeply decoupled, service-oriented architecture with asynchronous I/O throughout.
 
 ```mermaid
 graph TD
-    %% Define styles
     classDef frontend fill:#06122d,stroke:#7bd0ff,stroke-width:2px,color:#dee5ff;
     classDef backend fill:#05183c,stroke:#10b981,stroke-width:2px,color:#dee5ff;
     classDef db fill:#1e1e1e,stroke:#f59e0b,stroke-width:2px,color:#dee5ff;
     classDef agent fill:#2d3748,stroke:#a78bfa,stroke-width:2px,color:#dee5ff;
-    classDef network fill:none,stroke:#fff,stroke-dasharray: 5 5;
-    
-    %% Nodes
-    User([System Administrator])
-    
+    classDef edge fill:none,stroke:#64748b,stroke-dasharray:5 5,color:#dee5ff;
+
+    User(["👤 System Administrator"])
+
     subgraph "DMZ / Edge"
-        Nginx[Nginx Reverse Proxy / Load Balancer]:::network
+        Nginx["Nginx Reverse Proxy<br/>WebSocket Upgrade • Rate Limiting"]:::edge
     end
-    
+
     subgraph "Presentation Layer"
-        SPA[React 18 + Vite 7<br/>Custom SPA — No UI Framework]:::frontend
+        SPA["React 18.3.1 + Vite 7.1.5<br/>Custom SPA — No External UI Library"]:::frontend
     end
-    
-    subgraph "Application Layer (Python/FastAPI)"
-        API[REST Core Controller]:::backend
-        WS[WebSocket Telemetry Hub]:::backend
-        Tasks[Background Job Queue]:::backend
+
+    subgraph "Application Layer"
+        API["FastAPI 0.135 REST Core<br/>40+ Routers • Async SQLAlchemy"]:::backend
+        WS["WebSocket Telemetry Hub<br/>/api/notifications/ws"]:::backend
+        GQL["GraphQL API<br/>strawberry-graphql"]:::backend
+        BG["Background Schedulers<br/>Backup • Mirror • Runbook"]:::backend
     end
-    
-    subgraph "Data & Persistence Layer"
-        Postgres[(PostgreSQL 12+<br/>Row-Level Lock Enabled)]:::db
-        Prometheus[Prometheus Metrics]:::db
+
+    subgraph "Data & Observability Layer"
+        Postgres[("PostgreSQL 12+<br/>asyncpg • Row-Level Locking")]:::db
+        Prometheus["Prometheus Metrics<br/>+ Grafana Dashboards"]:::db
     end
-    
-    subgraph "Target Nodes / Edge Computing"
-        Linux[Linux Agent]:::agent
-        Unix[AIX/Solaris/HP-UX]:::agent
-        Win[Windows Agent]:::agent
+
+    subgraph "Edge / Target Nodes"
+        Linux["Linux Agent<br/>Ubuntu • Debian • RHEL • Alpine • Arch"]:::agent
+        Unix["UNIX Agent<br/>AIX • Solaris • HP-UX • FreeBSD"]:::agent
+        Win["Windows Agent"]:::agent
     end
-    
-    %% Relationships
+
     User -- HTTPS --> Nginx
     Nginx -- Port 3000 --> SPA
     Nginx -- /api/ --> API
     Nginx -- Upgrade: websocket --> WS
-    
-    SPA -- REST Calls --> API
-    SPA -- WSS Connect --> WS
-    
-    API -- Read/Write --> Postgres
-    API -- Dispatch --> Tasks
-    API -- Query --> Prometheus
-    Tasks -- Write State --> Postgres
-    
-    Linux -- Heartbeat / API --> Nginx
-    Unix -- Heartbeat / API --> Nginx
-    Win -- Heartbeat / API --> Nginx
+    Nginx -- /graphql --> GQL
+
+    SPA -- REST --> API
+    SPA -- WSS --> WS
+
+    API --> Postgres
+    API --> BG
+    API --> Prometheus
+    GQL --> Postgres
+    BG --> Postgres
+
+    Linux -- POST /api/heartbeat --> Nginx
+    Unix -- POST /api/heartbeat --> Nginx
+    Win -- POST /api/heartbeat --> Nginx
 ```
 
-### 2. Telemetry & Heartbeat Data Flow
-Agents operate on a strict, stateless polling mechanism to bypass inbound firewall restrictions. The controller never initiates connections to the agents.
+### 2. Heartbeat & Telemetry Flow
+
+Agents use a strict **outbound-only** polling model, eliminating the need for inbound firewall rules on target nodes.
 
 ```mermaid
 sequenceDiagram
-    participant Agent as Target Agent
-    participant Nginx as Nginx Edge
-    participant API as REST Controller
-    participant DB as PostgreSQL
-    participant UI as React 18 Dashboard
+    participant A as Target Agent (SystemD)
+    participant N as Nginx Edge
+    participant F as FastAPI Core
+    participant D as PostgreSQL
+    participant U as React Dashboard
 
-    Note over Agent: Runs autonomously via SystemD/Cron
-    Agent->>Nginx: POST /api/heartbeat (System Metrics)
-    Nginx->>API: Proxy Pass
-    API->>DB: UPSERT Node State & Telemetry
-    DB-->>API: Confirm Transaction
-    API-->>Nginx: 200 OK (w/ Pending Tasks)
-    Nginx-->>Agent: JSON Response
-    
-    Note over API, UI: Real-Time UI Synchronization
-    API->>UI: WSS Broadcast: { event: 'NODE_UPDATED' }
-    
-    alt If Tasks Pending
-        Agent->>Agent: Execute Local Patch Script
-        Agent->>Nginx: POST /api/tasks/status (Success/Fail)
+    Note over A: Runs every 30s via SystemD timer
+    A->>N: POST /api/heartbeat {cpu, mem, os, hostname}
+    N->>F: Proxy Pass
+    F->>D: UPSERT hosts SET last_seen=now(), status='online'
+    D-->>F: OK
+    F-->>A: 200 {pending_tasks: [...]}
+
+    Note over F,U: Real-time push via WebSocket
+    F->>U: WSS event: NODE_UPDATED
+
+    alt Patch task received
+        A->>A: Execute patch script locally
+        A->>N: POST /api/tasks/status {job_id, result}
+        F->>D: UPDATE jobs SET status='completed'
     end
 ```
 
-### 3. Database Architecture & State Management
-To support thousands of concurrent agents hitting the API every 30 seconds, the data layer employs advanced tuning:
-- **Row-Level Locking:** Deadlocks are prevented by aggressively utilizing `SELECT ... FOR UPDATE SKIP LOCKED` during task dispatch.
-- **Composite Indexing:** Heavy queries used by the frontend dashboard leverage composite indexes on `(status, last_seen)` to keep query times strictly under 5ms.
-- **Connection Pooling:** Controlled via SQLAlchemy, maintaining a strict `pool_size=100` to prevent database exhaustion under spike loads.
+### 3. Backend API Surface (Verified from `main.py`)
 
-### 4. Frontend Architecture (Verified from Codebase)
-The frontend is a **fully custom-built React 18.3.1 + Vite 7.1.5 Single Page Application** — no external UI component libraries are used. All components, layouts, icons, and styling are hand-crafted in-house.
+The FastAPI application mounts **40+ routers** covering the entire platform surface:
+
+| Domain | Router | Description |
+|---|---|---|
+| Auth | `auth_api`, `ldap_auth`, `oidc_auth` | JWT, LDAP/AD, OIDC/OAuth2 (Okta, Azure AD, Google, Keycloak) |
+| Agents | `register_v2`, `agent_proxy`, `agent_update` | Agent registration, heartbeat proxy, remote update delivery |
+| Hosts | `hosts_v2`, `host_timeline`, `groups`, `tags` | Fleet management, history, group/tag organization |
+| Patching | `jobs_v2`, `bulk_patch`, `canary_testing`, `ring_rollout` | Job dispatch, bulk ops, canary phased rollout |
+| Repos | `packages_router`, `mirror_repos` | Local package repo, mirror sync |
+| Security | `cve`, `compliance`, `remediation`, `hooks` | CVE tracking, compliance audit, pre/post patch hooks |
+| CI/CD | `cicd`, `cicd_secrets`, `cicd_agent_targets`, `git_integration` | Full pipeline builder, encrypted secrets, Git integration |
+| Ops | `ops_queue`, `schedules`, `maintenance`, `sla`, `runbook` | Queue management, scheduling, maintenance windows |
+| Infrastructure | `backups`, `provisioning`, `network_boot`, `restore_drills` | Backup/recovery, PXE boot, disaster drill automation |
+| Observability | `monitoring`, `metrics`, `prometheus_targets`, `drift_detector` | Prometheus targets, drift detection, Grafana integration |
+| Platform | `license_router`, `reports`, `dashboard`, `search`, `plugins` | License enforcement, reports, global search, plugin integrations |
+| GraphQL | `graphql` (strawberry-graphql) | Schema-first GraphQL read API |
+
+### 4. Frontend Architecture (Verified from `frontend/src/`)
+
+A **fully hand-crafted React 18.3.1 + Vite 7.1.5 SPA** — zero reliance on external UI component libraries. Every component, icon, layout, and design token is built in-house.
 
 ```
 frontend/src/
-├── App.jsx                   # Root app: routing, auth, sidebar, 35+ lazy-loaded pages
-├── App.css                   # Full design system: tokens, layout, components (~36KB)
-├── appRuntime.js             # API client, JWT helpers, RBAC, WebSocket URL builder
-├── AppIcons.jsx              # Custom SVG icon library (no icon font dependency)
-├── ToastSystem.jsx           # Context-based global toast notification system
-├── DashboardOpsPage.jsx      # Live health, host stats, job activity
-├── HostsOpsPage.jsx          # Host fleet management
-├── PatchManagerOpsPage.jsx   # Patch orchestration UI
-├── CVEOpsPage.jsx            # CVE tracker and severity dashboard
-├── CICDOpsPage.jsx           # Full CI/CD pipeline builder (~115KB)
-├── MonitoringOpsPage.jsx     # Prometheus metrics & live graphs
-├── NetworkBootPage.jsx       # PXE / network boot management (~60KB)
-└── ... 30+ more production pages
+├── App.jsx                   # Root: auth, RBAC routing, sidebar nav, 35+ lazy pages (4,074 lines)
+├── App.css                   # Entire design system: tokens, layout, dark mode, components (~36KB)
+├── appRuntime.js             # API client, JWT store, RBAC helpers, WebSocket URL builder
+├── AppIcons.jsx              # Custom SVG icon library — no icon font dependency
+├── ToastSystem.jsx           # React Context global toast notification system
+│
+├── DashboardOpsPage.jsx      # Live system health, host stats, job activity feed
+├── HostsOpsPage.jsx          # Full host fleet management (~42KB)
+├── PatchManagerOpsPage.jsx   # Patch orchestration and job management (~42KB)
+├── CVEOpsPage.jsx            # CVE tracker with severity heatmap (~28KB)
+├── CICDOpsPage.jsx           # Full CI/CD visual pipeline builder (~115KB)
+├── NetworkBootPage.jsx       # PXE / network boot orchestration (~60KB)
+├── MirrorRepoOpsPage.jsx     # Repo mirror management (~41KB)
+├── MonitoringOpsPage.jsx     # Prometheus metrics & embedded Grafana
+├── UsersOpsPage.jsx          # User & RBAC administration (~31KB)
+└── ... 25+ more production pages
 ```
 
-**Key frontend capabilities — verified in codebase:**
+**Verified frontend capabilities:**
 
 | Capability | Implementation Detail |
 |---|---|
-| Auth | JWT tokens + SSO URL fragment callback + Active Directory / LDAP login modal |
-| Dark Mode | `data-theme` DOM attribute toggle, persisted in `localStorage` |
-| Global Search | `Ctrl+K` shortcut, 300ms debounced search across hosts, CVEs, jobs |
-| Navigation | RBAC + license feature-flag gated sidebar with 35+ pages |
-| Notifications | WebSocket push (`/api/notifications/ws`) + 30s polling fallback, unread badge |
-| Error Handling | Per-page `ErrorBoundary` + `React.Suspense` lazy-load fallbacks |
-| Performance | All pages loaded via `React.lazy()` — only downloads code when navigated to |
+| Auth | JWT + SSO URL-fragment callback + Active Directory/LDAP modal |
+| Dark Mode | `data-theme` DOM attribute, persisted to `localStorage` |
+| Global Search | `Ctrl+K` shortcut, 300ms debounced across hosts, CVEs, jobs |
+| Navigation | License feature-flag + RBAC gated sidebar — 35+ pages |
+| Notifications | WebSocket push (`/api/notifications/ws`) + 30s polling fallback |
+| Error Handling | Per-page `<ErrorBoundary>` + `React.Suspense` lazy-load fallbacks |
+| Code Splitting | All pages via `React.lazy()` — only loaded on navigation |
+| License Enforcement | Client-side feature gating from `/api/license/status` response |
+
+### 5. Database Architecture & Concurrency
+
+| Pattern | Detail |
+|---|---|
+| **ORM** | SQLAlchemy 2.0 async with `asyncpg` driver |
+| **Row-Level Locking** | `SELECT ... FOR UPDATE SKIP LOCKED` for deadlock-free task dispatch |
+| **Connection Pooling** | `pool_size=100` to handle thousands of simultaneous agent heartbeats |
+| **Migrations** | Managed via `backend/migrations/` |
+| **Multi-tenancy** | `MultiTenantMiddleware` for tenant-isolated data access |
 
 ---
 
-## 🚀 Advanced Capabilities
+## 🔒 Vendor Strategy & Air-Gapped Support
 
-### 1. 🛡️ Zero-Trust Air-Gapped Resiliency (`/vendor`)
-We recognize that highly classified infrastructure lacks internet egress. PatchMaster implements a rigorous offline bundle strategy:
-- **Pre-Compiled Wheels:** The `./vendor/vendor/wheels/` directory acts as a local PyPI mirror containing verified, signed binaries.
-- **Self-Contained Agents:** Cross-platform Python agents (~35MB) are packaged autonomously with their required runtime environment, guaranteeing deployments on systems with zero external connectivity.
+The `./vendor/` directory implements a **local PyPI mirror** strategy:
 
-### 2. 🚦 Canary Testing & Phased Rollouts
-Deploying patches blindly is a critical operational risk. PatchMaster's API (`backend/api/canary_testing.py`) includes a robust multi-phase rollout pipeline:
-- **Phased Triggers:** Automatically deploy to a 5% host subset, monitor telemetry for anomalies, and autonomously promote the patch to 100% of the fleet if healthy.
-- **Automated Fallback:** If the heartbeat or service status reports failure post-patch, the rollout is suspended automatically to prevent cascade failures.
+- **Pre-Compiled Wheels** in `./vendor/vendor/wheels/` — Flask, PyYAML, psutil, prometheus_client, requests, and all transitive dependencies bundled as verified `.whl` binaries.
+- **Zero Internet Required** — agent installation never reaches out to external package indexes. All dependencies resolved from local wheels only.
+- **Self-Contained Packages** — agent installers (~35MB) include a fully provisioned Python virtual environment, enabling deployment into classified, dark-site, or air-gapped environments.
 
-### 3. 📡 Real-Time Edge Telemetry
-Leveraging Python's asynchronous capabilities and Nginx HTTP/1.1 upgrade headers, the platform maintains persistent, low-latency WebSocket connections with target nodes.
-- **Live Observability:** Instantly view CPU limits, memory leaks, and registration statuses natively within the React dashboard.
+---
 
-### 4. 🎛️ License-Gated Feature System
-PatchMaster enforces a tiered feature access model evaluated directly in the frontend. Features such as CVE tracking, CI/CD pipelines, compliance dashboards, backup & recovery, and network boot are only activated when the active license tier supports them — resolved client-side from the `/api/license/status` API response with zero additional round-trips per navigation.
+## 🚀 Key Capabilities
+
+### 🚦 Canary Testing & Ring Rollout
+`backend/api/canary_testing.py` + `backend/api/ring_rollout.py`
+- Deploy to a configurable host subset first, monitor telemetry, then auto-promote or suspend.
+- Ring-based rollout model (Ring 0 → Ring N) with per-ring delay windows.
+
+### 🔐 Multi-Layer Security Middleware
+All enforced server-side via middleware stack in `main.py`:
+- **LicenseMiddleware** — blocks unlicensed API paths at the application layer.
+- **MultiTenantMiddleware** — enforces tenant data isolation.
+- **slowapi Rate Limiting** — protects against brute-force and DDoS.
+- **Security Headers** — `X-Content-Type-Options`, `Strict-Transport-Security`, full `Content-Security-Policy`, `Referrer-Policy`, `Permissions-Policy` on every response.
+
+### 🔑 Enterprise SSO & Identity
+- **Local Auth** — bcrypt-hashed passwords via `passlib`.
+- **LDAP / Active Directory** — optional `ldap3` integration.
+- **OIDC / OAuth2** — Okta, Azure AD, Google Workspace, Keycloak via `authlib`.
+- **JWT** — stateless tokens via `PyJWT 2.10.1`, 60-minute expiry.
+
+### 🧬 GraphQL API
+Full read API via `strawberry-graphql` mounted at `/graphql` — for BI tools, dashboards, and third-party integrations.
+
+### 🗂️ Pure-Python Git Integration
+`dulwich` provides a pure-Python Git implementation for the PatchRepo feature — enabling Git-backed patch content storage without requiring a system-level `git` binary.
 
 ---
 
 ## ⚙️ Deployment Matrix
 
-PatchMaster natively supports a variety of deployment topologies. 
-
 <details>
-<summary><b>🐳 Option A: High Availability Docker Swarm / Compose</b> <i>(Click to expand)</i></summary>
-<br>
-The optimal production deployment utilizes isolated containers for the API, Database, and Proxy components.
-
-```yaml
-# Extract from docker-compose.ha.yml
-services:
-  backend:
-    build: 
-      context: ./backend
-    deploy:
-      replicas: 3 # Load-balanced backend replicas
-    environment:
-      - DATABASE_URL=postgresql://patchmaster:${DB_PASSWORD}@postgres:5432/patchmaster
-      - ENABLE_WEBSOCKETS=true
-    networks:
-      - pm_internal
-
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    depends_on:
-      - backend
-      - frontend
-```
-**Execution:** `docker-compose -f docker-compose.ha.yml up -d`
-</details>
-
-<details>
-<summary><b>💻 Option B: Bare-Metal Legacy Deployment</b> <i>(Click to expand)</i></summary>
-<br>
-For systems without container orchestration, use the automated bash bootstrapper which natively configures SystemD and Nginx reverse proxy headers.
+<summary><b>🐳 Option A: Docker High Availability</b> <i>(Recommended for Production)</i></summary>
+<br/>
 
 ```bash
-# Decompress release package
-tar -xzf patchmaster-2.0.1.tar.gz && cd patchmaster-2.0.1
-
-# Run the hyper-visor setup pipeline
-sudo bash auto-setup.sh
+docker-compose -f docker-compose.ha.yml up -d
 ```
+
+Deploys 3 load-balanced FastAPI replicas, PostgreSQL, Nginx, and Prometheus in isolated networks.
 </details>
 
 <details>
-<summary><b>🤖 Option C: Heterogeneous Agent Compilation</b> <i>(Click to expand)</i></summary>
-<br>
-Agents are dynamically compiled via the `agent` tooling to support diverse kernels.
+<summary><b>💻 Option B: Bare-Metal (SystemD)</b></summary>
+<br/>
+
+```bash
+tar -xzf patchmaster-2.0.1.tar.gz && cd patchmaster-2.0.1
+sudo bash auto-setup.sh
+```
+
+Bootstraps Nginx, PostgreSQL, and the FastAPI backend as SystemD services.
+</details>
+
+<details>
+<summary><b>🤖 Option C: Agent Compilation</b></summary>
+<br/>
 
 ```bash
 cd agent
-# Produce .deb and .rpm artifacts
-bash build-deb-fixed.sh && bash build-rpm.sh 
-# Produce static tarballs for esoteric UNIX (Solaris/AIX)
-bash build-all-fixed.sh 2.0.1
+bash build-all-fixed.sh 2.0.1   # All platforms
+bash build-deb-fixed.sh          # Ubuntu/Debian (.deb)
+bash build-rpm.sh                # RHEL/CentOS (.rpm)
 ```
 </details>
 
 ---
 
-## 🛠️ Advanced Telemetry & Diagnostics
+## 🛠️ Diagnostics & Troubleshooting
 
-PatchMaster provides low-level scripts to detect environment desynchronization, WebSocket proxy failures, and agent ghosting:
-
-| Diagnostic Tool | Target Context | Description |
-|-----------------|----------------|-------------|
-| `./diagnose_agent_issues.sh` | Controller | Probes Postgres, FastApi edge, and SystemD to ensure HA clustering health. |
-| `./fix_websocket_and_groups.sh` | Nginx Edge | Rebuilds `Upgrade $http_upgrade` proxy paths to resolve WS handshake failures. |
-| `./fix_agent_registration.sh` | Target Node | Forces a hard reset of local state and aggressively attempts handshake with the Controller. |
-| `./test_frontend_backend.sh` | Controller | Executes end-to-end integration tests confirming API contract integrity. |
+| Script | Target | Purpose |
+|---|---|---|
+| `./diagnose_agent_issues.sh` | Controller | Full health probe — PostgreSQL, FastAPI, SystemD, agent counts |
+| `./fix_websocket_and_groups.sh` | Nginx Edge | Repairs `Upgrade $http_upgrade` WebSocket proxy headers |
+| `./fix_agent_registration.sh` | Target Node | Resets local agent state and forces controller handshake |
+| `./test_frontend_backend.sh` | Controller | End-to-end integration tests verifying API contract integrity |
 
 ---
 
 ## 🛡️ Security Posture
 
-- **RBAC & Token Management:** JWT-based stateless authentication with strict 60-minute expiry windows.
-- **Hardened Configurations:** Automated cryptographic generation for PostgreSQL and Grafana default parameters.
-- **CVE Mitigation:** Deep codebase scans preventing basic `except:` blocks, enforcing sanitized database inputs to prevent SQLi.
+- **RBAC** — role + permission-scoped API and UI access.
+- **JWT** — stateless, 60-minute expiry, bcrypt-protected at rest.
+- **Rate Limiting** — `slowapi` guards against brute-force on auth endpoints.
+- **Full Security Headers** — HSTS, CSP, X-Frame-Options, Permissions-Policy on all responses.
+- **Cryptographic Secrets** — PostgreSQL and Grafana passwords generated via `secrets.token_hex(8)`.
+- **CVE Hardening** — 30-password denylist, sanitized DB inputs, typed exception handling throughout.
 
 ---
 
-## 📚 Deep Dive Documentation
+## 📚 Documentation
 
-For system administrators and integration engineers, detailed references are available:
-- **[Architectural Release Notes](RELEASE_NOTES_2.0.1.md)** - Low-level changes regarding WebSocket fixes and Agent Registration stability.
-- **[Dark Site Deployment Guide](OFFLINE_AGENT_INSTALLATION.md)** - Operational procedures for air-gapped data centers.
+| Document | Description |
+|---|---|
+| [Release Notes v2.0.1](RELEASE_NOTES_2.0.1.md) | WebSocket fixes, agent registration improvements, security hardening |
+| [Offline Agent Installation](OFFLINE_AGENT_INSTALLATION.md) | Deploying to air-gapped / dark-site environments |
+| [Deployment Fixes & Runbooks](DEPLOYMENT_FIXES.md) | Operational troubleshooting and remediation steps |
+| [Installation Notes](INSTALLATION_NOTES.md) | Full server setup guide |
 
-<br>
+---
+
+<br/>
 
 <div align="center">
-  <sub><b>Built by the PatchMaster Engineering Team</b></sub><br/>
-  <sup>Enterprise IT Infrastructure Modernization | Proprietary Software</sup>
+
+---
+
+### ⚠️ Proprietary & Confidential
+
+This software and all associated source code, documentation, configurations, and assets are the **exclusive private property of the PatchMaster Team and its Respected Owner**.
+
+Unauthorized copying, redistribution, modification, reverse engineering, or commercial use of any part of this codebase — in whole or in part — is **strictly prohibited** without prior written consent from the owner.
+
+All rights reserved. © 2026 PatchMaster by YVGROUP.
+
+---
+
+**Built with ❤️ by the PatchMaster Engineering Team**
+
+[![LinkedIn](https://img.shields.io/badge/Owner-Yash%20Kumar%20Dubey-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/yash-kumar-dubey-4b4926253/)
+
+*Enterprise IT Infrastructure Modernization | Proprietary Software*
+
 </div>
